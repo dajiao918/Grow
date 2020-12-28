@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/../MyString/MyString.iml" filepath="$PROJECT_DIR$/../MyString/MyString.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../栈、队列和递归/栈、队列和递归.iml" filepath="$PROJECT_DIR$/../栈、队列和递归/栈、队列和递归.iml" />
       <module fileurl="file://$PROJECT_DIR$/线性表.iml" filepath="$PROJECT_DIR$/线性表.iml" />
     </modules>
   </component>
