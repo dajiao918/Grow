@@ -4,6 +4,7 @@
 * [栈与队列](https://github.com/dajiao918/Grow/tree/master/数据结构/栈与队列.md)
 
 ## java道基
+* [多线程](https://github.com/dajiao918/Grow/tree/master/elseNote/多线程.md)
 * [坦克大战源码](https://github.com/dajiao918/Grow/tree/master/projectCode/TankWarProject)
 
 ## javaweb
