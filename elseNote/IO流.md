@@ -375,3 +375,279 @@ public class ToSecret {
 }
 ```
 
+
+
+## 转换流
+
+
+
+​	转换流提供了在字节流和字符流之间的转换
+
+* InputStreamReader：将InputStream转换为Reader
+* OutputStreamWriter:将Writer转换为OutputStream
+
+
+
+​	当字节流处理的文件都是字符时，转换为字符流操作更加高效
+
+​	很多时候我们都是用转换流来处理文件乱码问题，实现编码解码的功能，有时读取的文件时GBK或者是其他格式，将文件输出到控制台时没有设置编码格式就会导致乱码，所以需要手动的利用转换流来解码
+
+
+
+```java
+/**
+ * @program: IO
+ * @description:
+ * @author: Mr.Yu
+ * @create: 2021-01-16 10:00
+ **/
+public class TestOutputToReader {
+
+    @Test
+    public void Test() {
+
+        InputStreamReader isr = null;
+        OutputStreamWriter osw = null;
+
+        try {
+            //存储此文件时是gb2312编码，如果不设置编码格式就是utf-8，输出到控制台就会导致乱码
+            isr = new InputStreamReader(new FileInputStream("F:/a.txt"), "gb2312");
+            //改变复制之后的文件编码格式
+            osw = new OutputStreamWriter(new FileOutputStream("F:/b.txt"), "utf-8");
+            char[] buff = new char[20];
+            int len;
+            while ((len = isr.read(buff)) != -1) {
+                //打印到控制台
+                System.out.println(new String(buff,0,len));
+                osw.write(buff,0,len);
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            if (isr != null) {
+                try {
+                    isr.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+            if (osw != null) {
+                try {
+                    osw.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+}
+```
+
+
+
+## 输入输出流和打印流
+
+
+
+​	System.in和System.out分别代表了系统标准的输入和输出设备，默认的输入设备是键盘，输出设备是显示器
+
+​	System.in的类型是InputStream，而System.out的类型是PrintStream，是OutputStream的子类
+
+​	我们可以通过使用System类的setIn，setOut方法对默认设备进行改变
+
+
+
+体验输入流，读取控制台输入的数据，将其输出为大写字母，exit时退出
+
+```java
+/**
+ * @program: IO
+ * @description:
+ * @author: Mr.Yu
+ * @create: 2021-01-16 12:24
+ **/
+public class TestSystem {
+
+    public static void main(String[] args) {
+        //将字节流转换为字符流用缓冲流包住
+        BufferedReader br = null;
+        br = new BufferedReader(new InputStreamReader(System.in));
+
+        String data = null;
+        while (true) {
+            try {
+                data = br.readLine();//读取一行数据
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            if ("exit".equals(data)) {
+                break;
+            }
+            System.out.println(data.toUpperCase());
+        }
+        if (br != null) {
+            try {
+                br.close();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+}
+```
+
+
+
+
+
+练习：读取用户在控制台输入的数据，将其输出保存到文件中
+
+```java
+public class TestSystem {
+
+    public static void main(String[] args) {
+        //将字节流转换为字符流用缓冲流包住
+        BufferedReader br = null;
+        PrintWriter pw = null;
+        String data = null;
+        try {
+            br = new BufferedReader(new InputStreamReader(System.in));
+            pw = new PrintWriter(new FileWriter("f:/test.txt"));
+
+            while (true) {
+
+                data = br.readLine();//读取一行数据
+
+                if ("exit".equals(data)) {
+                    break;
+                }
+                pw.write(data.toUpperCase() + "\n");
+                pw.flush();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }finally {
+
+            if (br != null) {
+                try {
+                    br.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+}
+```
+
+
+
+## 对象流
+
+
+
+​	用于存储和读取基本数据类型的数据和对象的处理流，它的强大之处就是可以把java中的对象写入到数据源中，也能从数据源中还原回来
+
+* 序列化：ObjectInputStream类保存基本数据类型或对象的机制
+* 反序列化：ObjectInputStream类用来读取基本数据类型或对象的机制
+
+对象流不能序列化static和transient修饰的成员变量，他可以把在内存中的对象编程和平台无关的二进制数据，然后存储于磁盘之中，当其他的程序获取了这个文件之后，就可以从其中解析成java对象
+
+
+
+序列化前提：对象所属的类必须实现serializable接口，对象属性也必须是 可序列化的，除此之外，凡是实现serializiable接口的类都有一个表示序列化版本的静态常量
+
+* private static final long serialVersionUID;
+
+如果没有显示定义这个常量，它的值是由java运行环境自动根绝内部细节生成的，若类的属性做了修改，serialVersionUID可能会发生变化，所以应该显示定义此常量，也就是说，当没有定义此常量时，那么当类的属性发生改变时，反序列化时将会抛出版本不一致的异常InvalidCastException
+
+
+
+```java
+/**
+ * @program: IO
+ * @description:
+ * @author: Mr.Yu
+ * @create: 2021-01-16 18:10
+ **/
+public class TestObjectStream {
+
+    @Test
+    public void serializable() {
+
+        ObjectOutputStream ois = null;
+        try {
+            ois = new ObjectOutputStream(new FileOutputStream("test.txt"));
+            Person alan = new Person(1, "alan");
+            ois.writeObject(alan);
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            if (ois != null) {
+                try {
+                    ois.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+
+    @Test
+    public void noSerializable() {
+
+        ObjectInputStream ois = null;
+        try {
+            ois = new ObjectInputStream(new FileInputStream("test.txt"));
+            Object object = ois.readObject();
+            Person p = (Person) object;
+            System.out.println(p);
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+        } finally {
+            if (ois != null) {
+                try {
+                    ois.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
+}
+
+public class Person implements Serializable {
+
+    private static final long serialVersionUID = 42456467898453L;
+    private int id;
+    private String name;
+    private int age;
+
+    public Person(int id, String name) {
+        this.id = id;
+        this.name = name;
+    }
+
+    public Person(int id, String name, int age) {
+        this.id = id;
+        this.name = name;
+        this.age = age;
+    }
+
+    @Override
+    public String toString() {
+        return "Person{" +
+                "id=" + id +
+                ", name='" + name + '\'' +
+                ", age=" + age +
+                '}';
+    }
+}
+
+```
+
+
+
