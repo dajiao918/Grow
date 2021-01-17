@@ -410,7 +410,7 @@ public class TestOutputToReader {
         OutputStreamWriter osw = null;
 
         try {
-            //存储此文件时是gb2312编码，如果不设置编码格式就是utf-8，输出到控制台就会导致乱码
+            //存储此文件时是gb2312编码，如果不设置编码格式，默认的编码格式就是utf-8，输出到控制台就会导致乱码
             isr = new InputStreamReader(new FileInputStream("F:/a.txt"), "gb2312");
             //改变复制之后的文件编码格式
             osw = new OutputStreamWriter(new FileOutputStream("F:/b.txt"), "utf-8");
