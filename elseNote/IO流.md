@@ -281,9 +281,23 @@ public class BufferedInputStream extends FilterInputStream {
 
 ​	向流写入字节时，不会直接写到文件，先写到缓冲区直到缓冲区写满，缓冲流才会把缓冲区中的数据一次性的写到文件中，使用方法flush()可以强制将缓冲区的内容全部写入输出流
 
-​	关闭流时可以直接关闭外层的缓冲流，系统也会自动的帮忙把内部的流关闭
+​	关闭流时可以直接关闭外层的缓冲流，系统也会自动的帮忙把内部的流关闭；当在缓冲流中调用了close()方法后，是可以不用调用flush()方法进行刷新的，因为BufferedOutputStream的父类的close()方法，调用了flush()方法
+
+```java
+public void close() throws IOException {
+        try (OutputStream ostream = out) {
+            flush();
+        }
+    }
+```
+
+
+
+​	readLine()的理解：readLine()每次只读取一行，直到读取到文件末尾才会返回null
 
 ​	
+
+* 缓冲流测试
 
 ```java
 public class TestBuffered {
@@ -455,6 +469,20 @@ public class TestOutputToReader {
 ​	System.in的类型是InputStream，而System.out的类型是PrintStream，是OutputStream的子类
 
 ​	我们可以通过使用System类的setIn，setOut方法对默认设备进行改变
+
+​	PrintWriter和PrintOutputStream都有自动刷新功能，但需要在构造器中添加boolean参数，不然还是需要手动的刷新，打印流的close()方法并没有调用flush()方法
+
+```java
+public PrintStream(OutputStream out, boolean autoFlush) {
+    this(autoFlush, requireNonNull(out, "Null output stream"));
+}
+
+public PrintStream(OutputStream out) {
+    this(out, false);
+}
+```
+
+
 
 
 
