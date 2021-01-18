@@ -7,6 +7,7 @@
 * [多线程](https://github.com/dajiao918/Grow/tree/master/elseNote/多线程.md)
 * [IO流](https://github.com/dajiao918/Grow/tree/master/elseNote/IO流.md)
 * [网络编程](https://github.com/dajiao918/Grow/tree/master/elseNote/网络编程.md)
+* [简易socket聊天室](https://github.com/dajiao918/Grow/tree/master/elseNote/简易socket聊天室.md)
 * [坦克大战源码](https://github.com/dajiao918/Grow/tree/master/projectCode/TankWarProject)
 
 ## javaweb
