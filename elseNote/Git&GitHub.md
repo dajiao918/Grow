@@ -1,5 +1,17 @@
 # Git&GitHub
 
+
+
+* [git&gitHub](https://github.com/dajiao918/Grow/blob/main/elseNote/Git&GitHub.md)
+  * [本地库初始化](https://github.com/dajiao918/Grow/blob/main/elseNote/Git&GitHub.md#本地库初始化)
+  * [设置签名](https://github.com/dajiao918/Grow/blob/main/elseNote/Git&GitHub.md#设置签名)
+  * [添加提交和查看状态](https://github.com/dajiao918/Grow/blob/main/elseNote/Git&GitHub.md#添加提交和查看状态)
+  * [分支](https://github.com/dajiao918/Grow/blob/main/elseNote/Git&GitHub.md#分支)
+  * [连接远程库](https://github.com/dajiao918/Grow/blob/main/elseNote/Git&GitHub.md#连接远程库)
+  * [团队合作](https://github.com/dajiao918/Grow/blob/main/elseNote/Git&GitHub.md#团队合作)
+
+
+
 ##  本地库初始化
 
 ```shell
@@ -18,6 +30,8 @@ drwxr-xr-x 1 Administrator 197121   0 12月 23 12:53 objects/
 drwxr-xr-x 1 Administrator 197121   0 12月 23 12:53 refs/
 
 ```
+
+
 
 ## 设置签名
 
@@ -48,7 +62,12 @@ drwxr-xr-x 1 Administrator 197121   0 12月 23 12:53 refs/
 >   ```
 >
 > * 优先级：就近原则，项目级别优先于系统级别，二者都有时，采用项目级别
+>
 > * 二者必须至少有一个
+
+
+
+
 
 ##	添加提交和查看状态
 
@@ -130,6 +149,10 @@ drwxr-xr-x 1 Administrator 197121   0 12月 23 12:53 refs/
 >     * git reset --hard HEAD~n
 >     * 表示退n个版本
 
+
+
+
+
 ## 分支
 
 > * 分支的好处
@@ -149,7 +172,10 @@ drwxr-xr-x 1 Administrator 197121   0 12月 23 12:53 refs/
 > * 解决分支冲突
 >   * 进入文件删除特殊符号
 >   * git commit -m "日志信息" 不能带文件名
-> * 
+
+
+
+
 
 ## 连接远程库
 
@@ -179,6 +205,10 @@ drwxr-xr-x 1 Administrator 197121   0 12月 23 12:53 refs/
 >   git remote add origin ssh地址(可以在仓库的code下查询)
 >   git remote -v(查看远程地址)
 >   ```
+
+
+
+
 
 ## 团队合作
 
