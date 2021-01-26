@@ -1,6 +1,10 @@
 # MyBatis
 
-* [概述](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#概述)
+* [MyBatis](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md)
+	* [概述](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#概述)
+	* [搭建mybatis](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#搭建mybatis)
+	* [分析mybatis程序过程](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#分析mybatis程序过程)
+	* [自定义mybatis](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#自定义mybatis)
 
 
 ## 概述
