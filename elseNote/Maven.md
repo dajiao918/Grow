@@ -2,6 +2,22 @@
 
 
 
+* [Maven](https://github.com/dajiao918/Grow/blob/main/elseNote/Maven.md)
+
+  * [Maven下的目录结构](https://github.com/dajiao918/Grow/blob/main/elseNote/Maven.md#Maven下的目录结构)
+  * [在Maven中执行java项目](https://github.com/dajiao918/Grow/blob/main/elseNote/Maven.md#在Maven中执行java项目)
+  * [修改Maven的本地仓库地址](https://github.com/dajiao918/Grow/blob/main/elseNote/Maven.md#修改Maven的本地仓库地址)
+  * [pom项目对象模型](https://github.com/dajiao918/Grow/blob/main/elseNote/Maven.md#pom项目对象模型)
+  * [Maven的生命周期](https://github.com/dajiao918/Grow/blob/main/elseNote/Maven.md#Maven的生命周期)
+  * [Maven的命令](https://github.com/dajiao918/Grow/blob/main/elseNote/Maven.md#Maven的命令)
+  * [在idea中使用Maven](https://github.com/dajiao918/Grow/blob/main/elseNote/Maven.md#在idea中使用Maven)
+  * [依赖的范围](https://github.com/dajiao918/Grow/blob/main/elseNote/Maven.md#依赖的范围)
+  * [Maven的常用设置](https://github.com/dajiao918/Grow/blob/main/elseNote/Maven.md#Maven的常用设置)
+
+  
+
+
+
 ## Maven下的目录结构
 
 
