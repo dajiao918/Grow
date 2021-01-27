@@ -877,7 +877,7 @@ public class TestMybatisMapper {
 
 
 
-### 1、查询所有操作
+### 1. 查询所有操作
 
 ​		在mapper映射文件添加select标签
 
