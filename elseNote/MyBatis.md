@@ -877,7 +877,7 @@ public class TestMybatisMapper {
 
 
 
-## 1、查询所有操作
+### 1、查询所有操作
 
 ​		在mapper映射文件添加select标签
 
@@ -907,7 +907,7 @@ public class TestMybatisMapper {
 
 
 
-## 2、插入数据操作
+### 2、插入数据操作
 
 
 
@@ -935,7 +935,7 @@ public class TestMybatisMapper {
 
 
 
-## 3、更新数据操作
+### 3、更新数据操作
 
 
 
@@ -965,7 +965,7 @@ public class TestMybatisMapper {
 
 
 
-## 4、删除数据操作
+### 4、删除数据操作
 
 
 
@@ -990,7 +990,7 @@ public class TestMybatisMapper {
 
 
 
-## 5、查询一个和模糊查询
+### 5、查询一个和模糊查询
 
 * 查询一个
 
@@ -1038,7 +1038,7 @@ public class TestMybatisMapper {
 
   
 
-## 6、查询单列
+### 6、查询单列
 
 
 
@@ -1063,7 +1063,7 @@ public class TestMybatisMapper {
 
 
 
-## 7、获取插入数据的id
+### 7、获取插入数据的id
 
 ​		每次在我们插入数据后，返回地都是影响数据库的行数，但是并不知道现在是插入的第几个数据了，那么这样的需求就需要用到下面的sql语句
 
@@ -1200,7 +1200,7 @@ User{userId=null, userName='老王', userAddress='null', userBirthday=null, user
 
 ​		此时是有结果的，但是因为mysql在windows系统下不区分大小写，所以username是有值的，而其他的属性名和实体类不一致，所以封装的时候就是空值，这个时候想要解决这个问题，就有两种方法
 
-## 1、使用别名处理
+### 1、使用别名处理
 
 ​			由于是mysql的列名和属性名不一致，所以我们只要在查询时将mysql的列名起一个和实体类属性一样的别名就行了，在xml件中编写如下语句
 
@@ -1212,7 +1212,7 @@ User{userId=null, userName='老王', userAddress='null', userBirthday=null, user
 
 ​		这种方式执行的效率高，但开发速度比较慢，所以mybatis还提供了其他方式
 
-## 2、使用resultMap标签
+### 2、使用resultMap标签
 
 ​			在mapper标签的里面配置resultMap标签，如下：
 
@@ -1290,7 +1290,7 @@ User{userId=null, userName='老王', userAddress='null', userBirthday=null, user
 
 
 
-## 1、property属性
+### 1、property属性
 
 ​		
 
@@ -1342,7 +1342,7 @@ password=qwer
 
 
 
-## 2、typeAliases
+### 2、typeAliases
 
 * typeAlias标签
 
@@ -1368,7 +1368,7 @@ password=qwer
 
 
 
-## 3、mappers
+### 3、mappers
 
 ​	使用相对于类路径的资源，
 
