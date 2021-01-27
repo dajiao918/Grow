@@ -5,6 +5,26 @@
 	* [搭建mybatis](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#搭建mybatis)
 	* [分析mybatis程序过程](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#分析mybatis程序过程)
 	* [自定义mybatis](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#自定义mybatis)
+	* [mybatis的CRUD操作](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#mybatis的CRUD操作)
+	  * [1、查询所有操作](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#1、查询所有操作)
+	  * [2、插入数据操作](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#2、插入数据操作)
+	  * [3、更新数据操作](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#3、更新数据操作)
+	  * [4、删除数据操作](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#4、删除数据操作)
+	  * [5、查询一个和模糊查询](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#5、查询一个和模糊查询)
+	  * [6、查询单列（聚合函数）](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#6、查询单列)
+	  * [7、获取插入数据的id](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#7、获取插入数据的id)
+	* [OGNL表达式](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#OGNL表达式)
+	* [数据库的列名和实体类的属性不一致处理](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#数据库的列名和实体类的属性不一致处理)
+	  * [1、使用别名处理](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#1、使用别名处理)
+	  * [2、使用resultMap标签](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#2、使用resultMap标签)
+	* [SqlMapConfig.xml中配置的内容和顺序](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#SqlMapConfig.xml中配置的内容和顺序)
+	  * [1、property属性](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#1、property属性)
+	  * [2、typeAliases](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#2、typeAliases)
+	  * [3、mappers](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#3、mappers)
+
+
+
+
 
 
 ## 概述
@@ -817,5 +837,558 @@ public class testSelect {
         session.close();
     }
 }
+```
+
+
+
+
+
+## mybatis的CRUD操作
+
+
+
+​		在测试类中添加如下代码，这样就能减少工作量，让我们专心操作于mybatis的crud，这里省略接口代码
+
+```java
+public class TestMybatisMapper {
+
+    InputStream in;
+    UserDao userDao;
+
+    @Before//表示在测试方法执行之前执行
+    public void init() throws IOException {
+
+        in = Resources.getResourceAsStream("SqlMapConfig.xml");
+        SqlSessionFactory factory = new SqlSessionFactoryBuilder().build(in);
+        Sqlession session =  factory.openSession();
+        userDao = session.getMapper(UserDao.class);
+    }
+
+    @After//在测试方法执行之后执行
+    public void destroy() throws IOException {
+        //mybatis关闭了自动提交事务，所以需要手动提交，相当于connection.commit()，如果不手动提交事务就会回滚
+        session.commit();
+        //关闭session其实就是关闭connection
+        session.close();
+        in.close();
+    }
+}
+```
+
+
+
+### 1、查询所有操作
+
+​		在mapper映射文件添加select标签
+
+```java
+<!--namespace属性填写全限定接口名称-->
+<mapper namespace="com.dajiao.dao.UserDao">
+    <!--id是接口的方法名称，resulttype是返回类型,必须填写全限定类名，内容是sql语句-->
+    <select id="selectUsers" resultType="com.dajiao.domain.user">
+        select * from user
+    </select>
+</mapper>
+```
+
+​		测试类中编写测试代码
+
+```java
+
+
+@Test
+    public void select(){
+        List<User> users = userDao.selectUsers();
+        for (User user : users) {
+            System.out.println(user);
+        }
+    }
+```
+
+
+
+### 2、插入数据操作
+
+
+
+​		mapper映射文件添加insert标签，id属性同样是接口的方法名，paratmterType属性是参数类型，同样要填写全限定名称，resultType不用填写全限定名称的原因是mybatis已经给常用的基本数据类型和一些其他类型注册了别名，并且不区分大小写，#{}表示占位符，里面需要填写传入**实体类的属性**
+
+```xml
+<insert id="insertUser" paratmterType="com.dajiao.domain.user" resultType="int">
+	insert into user(username,address,sex,birthday) values(#{username},#{address},#{sex},#{birthday})
+</insert>
+```
+
+​		测试类
+
+```java
+@Test
+    public void testInsert(){
+        User user = new User();
+        user.setAddress("广东清远");
+        user.setBirthday(new Date());
+        user.setSex("男");
+        user.setUsername("mybatis insert user_name2");
+        userDao.insertUser(user);
+    }
+```
+
+
+
+### 3、更新数据操作
+
+
+
+​			mapper添加update标签
+
+```xml
+<update id="updateUser" paratmterType="com.dajiao.domain.user" resultType="int">
+	update user set username=#{username},address=#{address},sex=#{sex},birthday=#{birthday} where id=#{id}
+</update>
+```
+
+​		测试类
+
+````java
+@Test
+    public void testUpdate() {
+        User user = new User();
+        user.setId(65);
+        user.setAddress("北京朝阳");
+        user.setBirthday(new Date());
+        user.setSex("g");
+        user.setUsername("mybatis update user65");
+        int i = userDao.updateUser(user);
+        System.out.println("修改的用户影响行数" + i);
+    }
+````
+
+
+
+### 4、删除数据操作
+
+
+
+​		mapper添加delete标签，这里的占位符可以随意填写，因为传入的参数是Integer类型，不是实体类，没有属性，mybatis可以直接识别
+
+```xml
+<delete id="deleteUser" paratmterType="int" resultType="int">
+	delete from user where id=#{uid}
+</delete>
+```
+
+​		测试类
+
+```java
+@Test
+    public void testDelete() {
+
+        int i = userDao.deleteUser(65);
+        System.out.println("=====");
+    }
+```
+
+
+
+### 5、查询一个和模糊查询
+
+* 查询一个
+
+​		mapper添加select标签
+
+```xml
+<select id="selectOne" paratmterType="int" resultType="com.dajiao.domain.User">
+	select * from user where id=#{uid}
+</select>
+```
+
+​		测试类
+
+```java
+@Test
+    public void testSelectOne() {
+
+        User user = userDao.selectUser(51);
+        System.out.println("查询到的用户时===" + user);
+    }
+```
+
+* 模糊查询
+
+  ​		mapper添加select标签
+
+  ```xml
+  <select id="selectUsersByDim" paratmterType="java.lang.String" resultType="com.dajiao.domain.User">
+  	select * from user where username like#{username}
+  </select>
+  ```
+
+  ​		测试类
+
+  ```java
+  @Test
+      public void testSelectUserByDim() {
+  		//当接口方法传入的参数没有拼接%时，执行方法时需要拼接
+          List<User> users = userDao.selectUsersByDim("%王%");
+          for (User user : users) {
+              System.out.println(user);
+          }
+      }
+  ```
+
+  
+
+### 6、查询单列
+
+
+
+​		mapper添加select标签
+
+```xml
+<select id="selectNumOfUser" resultType="int">
+	select count(id) from user
+</select>
+```
+
+​		测试类
+
+```java
+@Test
+    public void testNumOfUser() {
+
+        int numOfUser = userDao.selectNumOfUser();
+        System.out.println("用户的数量==" + numOfUser);
+    }
+```
+
+
+
+### 7、获取插入数据的id
+
+​		每次在我们插入数据后，返回地都是影响数据库的行数，但是并不知道现在是插入的第几个数据了，那么这样的需求就需要用到下面的sql语句
+
+```sql
+select last_insert_id()
+```
+
+​		我们只需要在mapper配置文件中的insert标签下加入selectKey标签
+
+```xml
+<insert id="insertUser" parameterType="com.dajiao.domain.User">
+    <!--keyproperty表示实体类的属性，keycolumn表示mysql的列名，resulttype属性表示返回类型，order表示是在insert之前执行-，还是之后执行，AFTER之后，BEFORE之前->
+   <selectKey keyProperty="userId" keyColumn="id" resultType="java.lang.Integer" order="AFTER">
+        select last_insert_id()
+   </selectKey>
+   insert into user(`username`,`address`,`sex`,`birthday`) values(#{userName},#{userAddress},#{userSex},#{userBirthday})
+</insert>
+```
+
+
+
+
+
+## OGNL表达式
+
+​		它是通过对象的取值方法来获取数据。在写法上把get给省略了。比如：我们获取用户的名称类中的写法：user.getUsername();OGNL表达式写法：user.usernamemybatis中为什么能直接写username,而不用user.呢：因为在parameterType中已经提供了属性所属的类，所以此时不需要写对象名
+
+​		当进行多表查询时，就不仅仅提供实体类信息了，可能还会提供商品信息，我们可以将两个实体类进行封装，就有了现在的需求
+
+​		新建QueryVo类，将user实体类作为QueryVo类的属性，并提供get/set方法
+
+```java
+public class QueryVo {
+
+    User user;
+
+    public User getUser() {
+        return user;
+    }
+
+    public void setUser(User user) {
+        this.user = user;
+    }
+}
+```
+
+
+
+​		于是根据QueryVo对象进行模糊查询
+
+```java
+//UserDao接口方法
+List<User> selectUsersForQueryVoByDim(QueryVo vo);
+```
+
+```xml
+select id="selectUsersForQueryVoByDim" parameterType="com.dajiao.queryvo.QueryVo" resultType="com.dajiao.domain.User">
+        select * from user where username like#{user.userName}
+    </select>
+```
+
+```java
+@Test
+    public void testSelectUsersForQueryVoByDim() {
+
+        QueryVo queryVo = new QueryVo();
+        User user = new User();
+        user.setUserAddress("北京朝阳");
+        user.setUserBirthday(new Date());
+        user.setUserSex("g");
+        user.setUserName("%王%");
+        queryVo.setUser(user);
+        List<User> users = userDao.selectUsersForQueryVoByDim(queryVo);
+        for (User user1 : users) {
+            System.out.println(user1);
+        }
+    }
+```
+
+
+
+## 数据库的列名和实体类的属性不一致处理
+
+
+
+​			当数据库的列名和实体类的属性不一致处理时，例如
+
+```java
+public class User {
+
+    private Integer userId;
+    private String userName;
+    private String userAddress;
+    private Date userBirthday;
+    private String userSex;
+}
+```
+
+
+
+​		我们先可以测试一下增删改方法，当测试增删改方法时，会报出异常
+
+```java
+Cause: org.apache.ibatis.reflection.ReflectionException: There is no getter for property named 'username' in 'class com.dajiao.domain.User'
+```
+
+​		这个异常说：在com.dajiao.domain.user类中没有名为username的属性getter，因为此时映射文件中的sql语句是
+
+```java
+<insert id="insertUser" paratmterType="com.dajiao.domain.user" resultType="int">
+	insert into user(username,address,sex,birthday) values(#{username},#{address},#{sex},#{birthday})
+</insert>
+```
+
+​		mybatis不认识占位符username，只能写成如下的语句
+
+```xml
+<insert id="insertUser" parameterType="com.dajiao.domain.User">
+	insert into user(`username`,`address`,`sex`,`birthday`) values(#{userName},#{userAddress},#{userSex},#{userBirthday})
+</insert>
+```
+
+​		这样的话mybatis才会认识实体类的属性，同理，更新也需要修改占位符，删除不需要更改，因为占位符是id，所以的出结论，增删改方法的占位符一定要与实体类的属性对应，这样mybatis才好进行识别，修改实体类属性和数据库的列名不一致对增删改方法影响不大
+
+​		但是当我们执行查询方法时，会有如下的结果：
+
+```java
+User{userId=null, userName='老王', userAddress='null', userBirthday=null, userSex='null'}
+User{userId=null, userName='小二王', userAddress='null', userBirthday=null, userSex='null'}
+User{userId=null, userName='小二王', userAddress='null', userBirthday=null, userSex='null'}
+User{userId=null, userName='传智播客', userAddress='null', userBirthday=null, userSex='null'}
+User{userId=null, userName='老王', userAddress='null', userBirthday=null, userSex='null'}
+```
+
+​		此时是有结果的，但是因为mysql在windows系统下不区分大小写，所以username是有值的，而其他的属性名和实体类不一致，所以封装的时候就是空值，这个时候想要解决这个问题，就有两种方法
+
+### 1、使用别名处理
+
+​			由于是mysql的列名和属性名不一致，所以我们只要在查询时将mysql的列名起一个和实体类属性一样的别名就行了，在xml件中编写如下语句
+
+```xml
+<select id="selectUsers" resultType="com.dajiao.domain.User">
+   select id userId,username userName,birthday userBirthday,sex userSex,address userAddress from user
+</select>
+```
+
+​		这种方式执行的效率高，但开发速度比较慢，所以mybatis还提供了其他方式
+
+### 2、使用resultMap标签
+
+​			在mapper标签的里面配置resultMap标签，如下：
+
+```xml
+<!--id属性表示唯一标识，只要下面的select标签将id属性的值引用上，就可以使用resultMap标签的内容，解决列名不一致的问题
+	type属性表示实体类的全限定名称，用于表示select标签返回地类型
+-->
+<resultMap id="userMap" type="com.dajiao.domain.User">
+   <!--id标签配置主键，property属性表示实体类中的属性，column属性表示mysql的列名-->
+   <id property="userId" column="id"></id>
+   <!--result标签配置其他列名-->
+   <result property="userName" column="username"></result>
+   <result property="userAddress" column="address"></result>
+   <result property="userBirthday" column="birthday"></result>
+   <result property="userSex" column="sex"></result>
+</resultMap>
+```
+
+​			在select标签中，这样引用resultMap标签的内容,不用再写返回类型的属性了
+
+```xml
+<select id="selectUsers" resultMap="userMap">
+    select * from user
+</select>
+```
+
+​			这种方式是大大的提高了可开发效率，是可取之道
+
+
+
+
+
+## SqlMapConfig.xml中配置的内容和顺序
+
+
+
+​			SqlMapConfig.xml文件的标签是不能乱放的，是有顺序的，其顺序如下：
+
+```xml
+<configuration>
+    <properties>
+        <property>
+        </property>
+    </properties>（属性）
+
+    <settings>
+        <setting></setting>
+    </settings>（全局配置参数）
+
+    <typeAliases>
+        <typeAliase></typeAliase>
+        <package/>
+    </typeAliases>（类型别名）
+
+    <typeHandlers>
+    </typeHandlers>（类型处理器）
+
+    <plugins>
+    </plugins>（插件）
+
+    <environments default="mysql">
+        <environment id="mysql">
+            <transactionManager type="JDBC"></transactionManager>
+            <dataSource type="POOLED">
+            </dataSource>
+       </environment>
+    </environments>
+
+    <mappers>
+        <mapper resource="com/dajiao/dao/UserDao.xml"/>
+        <package/>
+    </mappers>
+</configuration>
+```
+
+
+
+### 1、property属性
+
+​		
+
+​			我们可以使用 property属性来指定mysql驱动、url、用户名和密码，例如：
+
+```xml
+<properties>
+    <property name="driver" value="com.mysql.cj.jdbc.Driver"/>
+    <property name="url" value="jdbc:mysql://localhost:3306/mybatis?serverTimezone=UTC"/>
+    <property name="username" value="root"/>
+    <property name="password" value="qwer"/>
+</properties>
+
+<!--应用property属性-->
+<environments default="mysql">
+     <environment id="mysql">
+     	<transactionManager type="JDBC"></transactionManager>
+    	 <dataSource type="POOLED">
+        	 <property name="driver" value="${driver}"/>
+        	 <property name="url" value="${url}"/>
+        	 <property name="username" value="${username}"/>
+        	 <property name="password" value="${password}"/>
+    	</dataSource>
+	</environment>
+</environments>
+```
+
+​		当然上面的做法是有那么一点重复性了，那我们可以使用property另一种方法，在资源目录的类路径下定义jdbcConfig.properties文件
+
+```xml
+driver=com.mysql.jdbc.Driver
+url=jdbc:mysql://localhost:3306/mybatis?serverTimezone=UTC
+username=root
+password=qwer
+```
+
+​		然后使用property的resource属性来获取文件，这样也可以使用上面的xml代码--**${driver}**--来实现mysql的各种资源获取
+
+```xml
+<properties resource="jdbcConfig.properties"></properties>
+```
+
+​		当然，还可以用property标签的url属性进行文件资源的获取，不过此时路径的值需要加上file协议，主机，端口号，以及URL（同一资源定位符），出现中文可能会导致乱码，尽量避免
+
+```xml
+<properties url="file:///F:\JavaProject\mybatis\study_mybatis_daoStudy\src\main\resources/jdbcConfig.properties">
+</properties>
+```
+
+
+
+### 2、typeAliases
+
+* typeAlias标签
+
+​		在上面进行增删改查的过程中，编写xml代码时，基本数据类型和一些其他的类型是可以使用别名的，而我们写实体类名称却要写全限定类名，如果执行一些大型的项目，这是很不方便的，所以mybatis是支持我们自定义别名方式来进行开发，这就是用到了**typeAliases**标签，例如：
+
+```xml
+<typeAliases>
+    <typeAlias type="com.dajiao.domain.User" alias="user"></typeAlias>-->
+</typeAliases>
+```
+
+​		typeAlias标签用于配置实体类的别名，配好别名之后在接口的配置文件中的实体类信息就可以使用别名并且不再区分大小写，但这个标签一次只能配置一个实体类，是有那么一点局限的，所以还有另外一种方式
+
+* package标签
+
+```xml
+<package name="com.dajiao.domain"/>
+```
+
+​		package标签的name属性只填写实体类的包名，这样就可以批量的对包下的实体类起别名，要求别名和实体类名一致，但不区分大小写
+
+​		我们只需要在mapper映射文件下的比如说select标签的--**resultMap="user"**--即可，不需要再写权限定名称，也可以在insert标签的--**parameterType="user"**--即可，这样有助于开发
+
+
+
+### 3、mappers
+
+​	使用相对于类路径的资源，
+
+```xml
+<mapper resource="com/itheima/dao/IUserDao.xml" />
+```
+
+​	使用 mapper 接口类路径，使用**注解的方式开发**
+
+```xml
+ <mapper class="com.itheima.dao.UserDao"/>
+注意：此种方法要求 mapper 接口名称和 mapper 映射文件名称相同，且放在同一个目录中。
+```
+
+​		当然这也可以使用package属性，标识所有mapper接口
+
+```xml
+<mappers>
+    <!--dao路径下的资源接口都可以被标识，但要求dao下面的接口名称和mapper映射文件的namespace属性值相同-->
+	 <package name="com.dajiao.dao"/>
+</mappers>
 ```
 
