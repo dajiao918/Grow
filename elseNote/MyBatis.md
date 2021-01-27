@@ -6,7 +6,7 @@
 	* [分析mybatis程序过程](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#分析mybatis程序过程)
 	* [自定义mybatis](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#自定义mybatis)
 	* [mybatis的CRUD操作](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#mybatis的CRUD操作)
-	  * [1、查询所有操作](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md##1、查询所有操作)
+	  * [1、查询所有操作](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#1.查询所有操作)
 	  * [2、插入数据操作](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#2、插入数据操作)
 	  * [3、更新数据操作](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#3、更新数据操作)
 	  * [4、删除数据操作](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#4、删除数据操作)
@@ -877,7 +877,7 @@ public class TestMybatisMapper {
 
 
 
-## 1、查询所有操作
+## 1.查询所有操作
 
 ​		在mapper映射文件添加select标签
 
