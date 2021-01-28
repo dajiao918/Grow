@@ -21,7 +21,15 @@
 	  * [1、property属性](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#1-property属性)
 	  * [2、typeAliases](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#2-typeAliases)
 	  * [3、mappers](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#3-mappers)
-
+	* [mybatis的连接池](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#mybatis的连接池)
+	  * [1. UNPOOLED连接方式](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#1-UNPOOLED连接方式)
+	  * [2. POOLED连接方式](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#2-POOLED连接方式)
+	* [mybatis的事务管理](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#mybatis的事务管理)
+	* [mybatis的动态SQL语句](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#mybatis的动态SQL语句)
+	* [mybatis的多表查询](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#mybatis的多表查询)
+	  * [1. 一对一查询](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#1-一对一查询)
+	  * [2. 一对多查询](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#2-一对多查询)
+	  * [3. 多对多查询](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#3-多对多查询)
 
 
 
@@ -1392,3 +1400,625 @@ password=qwer
 </mappers>
 ```
 
+
+
+## mybatis的连接池
+
+
+
+​		mybatis的连接池技术是通过主配置文件SqlMapConfig.xml文件设置的
+
+```xml
+<dataSource type="POOLED"></dataSource>
+```
+
+​		type类型指定连接池技术，mybatis中有三种连接池技术
+
+
+
+### 1. UNPOOLED连接方式
+
+​		
+
+​				UNPOOLED其实就是UnpooledDataSource类的简写，这个类实现了DataSource接口，它不是从mybatis定义的连接池中取出连接，而是每次要用的时候自己去创建一个连接，当以POOLED的方式去获取链接的时候，没有空闲的连接的话，就会通过UnpooledDataSource去创建新的连接
+
+```java
+public class UnpooledDataSource implements DataSource {
+    
+    @Override
+    public Connection getConnection() throws SQLException {
+        //调用dogetconnection方法，将username和password存储在properties对象中
+      return doGetConnection(username, password);
+    }
+    
+    private Connection doGetConnection(String username, String password) throws SQLException {
+        Properties props = new Properties();
+        if (driverProperties != null) {
+          props.putAll(driverProperties);
+        }
+        if (username != null) {
+          props.setProperty("user", username);
+        }
+        if (password != null) {
+          props.setProperty("password", password);
+        }
+        //调用重载的doGETConnection方法，注册驱动并且获取连接
+        return doGetConnection(props);
+    }
+    
+    private Connection doGetConnection(Properties properties) throws SQLException {
+        //，调用下面的initializeDriver()方法注册驱动
+        initializeDriver();
+        //获取连接
+        Connection connection = DriverManager.getConnection(url, properties);
+        configureConnection(connection);
+        return connection;
+    }
+    
+    private synchronized void initializeDriver() throws SQLException {
+        if (!registeredDrivers.containsKey(driver)) {
+          Class<?> driverType;
+          try {
+            if (driverClassLoader != null) {
+                //注册驱动
+              driverType = Class.forName(driver, true, driverClassLoader);
+            } else {
+              driverType = Resources.classForName(driver);
+            }
+            // DriverManager requires the driver to be loaded via the system ClassLoader.
+            // http://www.kfu.com/~nsayer/Java/dyn-jdbc.html
+            Driver driverInstance = (Driver)driverType.newInstance();
+            DriverManager.registerDriver(new DriverProxy(driverInstance));
+            registeredDrivers.put(driver, driverInstance);
+          } catch (Exception e) {
+            throw new SQLException("Error setting driver on UnpooledDataSource. Cause: " + e);
+          }
+    }
+}
+```
+
+
+
+
+
+### 2. POOLED连接方式
+
+
+
+​				POOLED类型的连接方式是通过mybatis创建的连接池技术，它是一个线程安全的连接池技术，用同步代码快将获取连接的代码包起来，不会出现两个线程拿到同一个连接的情况，同时也采用了当要获取连接时，首先会判断空闲连接池中还有没有空闲的连接，有的会就会从空闲的连接池找到休息的最久的connection拿去用，当没有空闲的连接池中没有空闲的连接的时候，就会判段活跃的连接池中的连接是否达到了设定的最大上限，如果没有就会通过UNPOOLED去创建一个连接，如果已经超过了，那么mybatis就会通过获取最老的活跃的连接，进行相关的处理，然后去用
+
+```java
+public class PooledDataSource implements DataSource {
+    
+    //连接池
+    private final PoolState state = new PoolState(this);
+    //持有UNpool额的DataedSource的引用
+    private final UnpooledDataSource dataSource;
+
+    // OPTIONAL CONFIGURATION FIELDS
+    //活跃连接池的连接上限
+    protected int poolMaximumActiveConnections = 10;
+    //空闲连接池的连接上限
+    protected int poolMaximumIdleConnections = 5;
+    
+    @Override
+    public Connection getConnection() throws SQLException {
+   		 return popConnection(dataSource.getUsername(), dataSource.getPassword()).getProxyConnection();
+    }
+    
+    private PooledConnection popConnection(String username, String password) throws SQLException {
+    boolean countedWait = false;
+    PooledConnection conn = null;
+    long t = System.currentTimeMillis();
+    int localBadConnectionCount = 0;
+
+    while (conn == null) {
+        //这是一个线程安全的，不会出现两个线程同时拿到同一个连接的情况
+      synchronized (state) {
+          //如果还有空闲的连接
+        if (!state.idleConnections.isEmpty()) {
+          // Pool has available connection
+            //拿出休息的最久的连接，也就是拿出最先进入连接池的
+          conn = state.idleConnections.remove(0);
+          if (log.isDebugEnabled()) {
+            log.debug("Checked out connection " + conn.getRealHashCode() + " from pool.");
+          }
+        } else {
+          // Pool does not have available connection
+            //如果没有空闲的连接，但是活跃连接池的连接数没有达到上限
+          if (state.activeConnections.size() < poolMaximumActiveConnections) {
+            // Can create new connection
+              //就是用unpooledDataSource创健一个连接
+            conn = new PooledConnection(dataSource.getConnection(), this);
+            if (log.isDebugEnabled()) {
+              log.debug("Created connection " + conn.getRealHashCode() + ".");
+            }
+          } else {
+              //将最老的活跃连接连接经过特殊处理，再拿去用
+              PooledConnection oldestActiveConnection = state.activeConnections.get(0);
+          }
+        }
+      }
+}
+```
+
+
+
+​		
+
+## mybatis的事务管理
+
+
+
+​			mybatis每次从UnpooledDataSource创建连接的时候，都会调用connection.setAutoCommit(false)，将自动提交事务关闭，所以每次增删改之后，都需要使用sqlSession.commit()，来进行事务的提交，其实也就是connection.commit()，那当然，mybatis其实也提供了，自动提交事务的方法，只要在获取sqlSession的时候，将openSession方法传入参数true就行了
+
+```java
+//自动提交事务
+@Override
+  public SqlSession openSession(boolean autoCommit) {
+    return openSessionFromDataSource(configuration.getDefaultExecutorType(), null, autoCommit);
+  }
+
+//关闭连接
+public class JdbcTransaction implements Transaction {
+     @Override
+  	 public void commit() throws SQLException {
+      	if (connection != null && !connection.getAutoCommit()) {
+      		if (log.isDebugEnabled()) {
+       			 log.debug("Committing JDBC Connection [" + connection + "]");
+     		 }
+     		 connection.commit();
+    	}
+ 	  }
+}
+
+//关闭自动提交事务
+public class UnpooledDataSource implements DataSource {
+    private void configureConnection(Connection conn) throws SQLException {
+        if (autoCommit != null && autoCommit != conn.getAutoCommit()) {
+          conn.setAutoCommit(autoCommit);
+        }
+        if (defaultTransactionIsolationLevel != null) {
+          conn.setTransactionIsolation(defaultTransactionIsolationLevel);
+        }
+      }
+}
+```
+
+
+
+
+
+## mybatis的动态SQL语句
+
+
+
+​		前面我们仅仅只是做了一些简单的查询，有些时候可能遇到各种条件都要满足的时候的查询，这个时候就需要运用mybatis提供的特殊标签了
+
+1. if标签
+
+   ​	我们根据实体类的不同取值，使用不同的 SQL 语句来进行查询。比如在 id 如果不为空时可以根据 id 查询，如果 username 不同空时还要加入用户名作为条件。这种情况在我们的多条件组合查询中经常会碰到
+
+```java
+//接口
+List<User> selectUsersByIf(User user);
+```
+
+​		映射配置文件
+
+```xml
+<select id="selectUsersByIf" resultType="user" parameterType="user">
+    <!--where 1=1并不是没有作用的，当下面的if条件不满足时，where后面就没有语句，造成语句错误，所以where 1=1的作用是更好的连接sql语句-->
+    select * from user where 1=1
+        <!--不能用&&连接条件，test属性表示判断条件，条件中写的是方法传入参数的属性名-->
+        <if test="username != null and username != ''">
+            and username like #{username}
+        </if>
+        <if test="address != null and address != ''">
+            and address like #{address}
+        </if>
+</select>
+```
+
+
+
+2. where标签
+
+   ​		为了简化where 1=1 的条件拼装，可以采用where标签来简化开发
+
+   ```xml
+   <select id="selectUsersByIf" resultMap="userMap" parameterType="user">
+           select * from user
+           <where >
+               <!--不能用&&连接条件，test条件中写的是方法传入参数的属性名-->
+               <if test="username != null and username != ''">
+                    u.username like #{username}
+               </if>
+               <if test="address != null and address != ''">
+                    u.address like #{address}
+               </if>
+           </where>
+       </select>
+   ```
+
+
+
+3. froeach标签
+
+   ​	有些时候我们可能会在一个范围类查询，比如说在id为41,45,50中是否有对应的用户，那么变成SQL语句就是
+
+   ```sql
+   select * from user where username like ('%余%') id in(41,45,50)
+   ```
+
+   在user下创建一个id的集合类型，并且提供get/set方法
+
+   ```java
+    List<Integer> ids;
+   
+       public List<Integer> getIds() {
+           return ids;
+       }
+   
+       public void setIds(List<Integer> ids) {
+           this.ids = ids;
+       }
+   ```
+
+   
+
+   所以在mybatis的映射文件中就是
+
+   ```xml
+   <select id="selectUsersByIds" parameterType="user" resultType="user">
+           select * from user
+           <where>
+               <!--判断ids是否有数据-->
+               <if test="ids != null and ids.size() > 0">
+                   <!--collection表示数据源，也就是遍历的集合，open表示连接的sql语句的开始，close表示连接的sql语句的结				束，separator表示分隔符，item就表示遍历的每个数据，相当于for(Integer id : ids)中的id，所以下方的					#{里面的字符和item相同}-->
+                   <foreach collection="ids" open="and id in(" close=")" separator="," item="id">
+                       #{id}
+                   </foreach>
+               </if>
+           </where>
+       </select>
+   ```
+
+
+
+4. sql标签
+
+   ​	这个标签可以将重复的sql语句提取出来，然后在标签中用include标签饮用即可
+
+   ```xml
+   <sql id="mysql">
+   	select * from user
+   </sql>
+   
+   <select id="finAll" resultType="user">
+       <!--引用sql语句-->
+   	<include refid="mysql"></include>
+   </select>
+   ```
+
+   
+
+## mybatis的多表查询
+
+
+
+### 1. 一对一查询
+
+​		其实一对一查询有时候也可以看成多对一的查询，比如说一个用户可以拥有多个订单，多个订单可以拥有一个用户，但是呢，就那一个订单出来的话，和用户的关系也就是一对一的关系
+
+​		首先，第一件事就是建立数据库表，用户和账户的关系是一对多，那么账户表就是从表，用户表就是主表，从表有着一个来自主表的外键约束
+
+```sql
+create table `account`(
+	id int primary key auto_increment,
+    uid int,
+    money double,
+    foreign key (uid) references user (id) #外键约束
+)
+
+INSERT  INTO `account`(`id`,`UID`,`MONEY`) VALUES (1,46,1000),(2,45,1000),(3,46,2000)
+
+```
+
+​		建立实体类
+
+```java
+package com.dajiao.domain;
+
+/**
+ * @program: study-mybatis-createMybatis
+ * @description:
+ * @author: Mr.Yu
+ * @create: 2021-01-27 21:49
+ **/
+public class Account {
+
+    private Integer id;
+    private Integer uid;
+    private Double money;
+
+ 	get/set/tostring....
+}
+
+```
+
+​		创建接口
+
+```xml
+package com.dajiao.dao;
+
+import com.dajiao.domain.Account;
+import com.dajiao.domain.AccountUser;
+
+import java.util.List;
+
+public interface AccountDao {
+
+	//利用继承的方式一对一查询
+    List<AccountUser> selectAccounts();
+	//利用resultMap的方式查询
+    List<Account> findAll();
+}
+```
+
+​		然后呢，就是怎样查询每个订单和订单所拥有的的用户了，第一件事就是sql语句的编写了，这里呢只查询了用户的姓名和地址，目的是为了运用继承的方式去实现sql语句的查询
+
+```sql
+select a.*,u.username,u.address from account a, user u where a.uid=u.id
+```
+
+​		建立AccountUser类，继承于Account类，并新增两个String属性
+
+```java
+package com.dajiao.domain;
+
+import com.dajiao.dao.AccountDao;
+
+/**
+ * @program: study-mybatis-createMybatis
+ * @description:
+ * @author: Mr.Yu
+ * @create: 2021-01-27 21:59
+ **/
+public class AccountUser extends Account {
+
+    private String username;
+    private String address;
+}
+
+```
+
+​		然后就是编写AccountDao的mapper映射文件了
+
+```xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.com.dajiao.dao.AccountDao">
+    <!--利用继承account类的方式实现一对一查询-->
+    <select id="selectAccounts" resultType="accountUser">
+        select a.*,u.username,u.address from account a, user u where a.uid=u.id
+    </select>
+</mapper>
+```
+
+```java
+//测试类
+@Test
+    public void testAll(){
+        List<AccountUser> accountUsers = accountDao.selectAccounts();
+        for (AccountUser accountUser : accountUsers) {
+            System.out.println(accountUser);
+        }
+    }
+```
+
+​		这样呢就巧妙的实现类一对一的查询了，当然如果每次一对一都要用继承的方式来做的话，效率太低，所以可以使用mybatis的resultMap标签来查询
+
+​		当然了，首先是要在Account类中定义一个user类的属性，这样才能查到Account对应的user
+
+```java
+ private User user;
+
+    public User getUser() {
+        return user;
+    }
+
+    public void setUser(User user) {
+        this.user = user;
+    }
+```
+
+​		然后就是sql语句的编写了
+
+```sql
+select a.id aid, a.uid, a.money,u.* from account a, user u where a.uid=u.id
+```
+
+​		此时需要注意一个问题，由于account和user都有一个id属性，如果不使用别名将其中一个id变为其他，那么在进行数据封装的时候，两个id混乱，比如说将Account的id封装到了user里面，所以此时最好起一个别名，下面就是mapper映射文件的配置了
+
+```xml
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.dajiao.dao.AccountDao">
+    <resultMap id="accountMap" type="account">
+        <!--注意数据库中起了别名，column属性必须使用别名，不然白起别名了-->
+        <id property="id" column="aid"></id>
+        <result property="uid" column="uid"></result>
+        <result property="money" column="money"></result>
+        <!--association标签用于指定从表方的引用主表方的实体类属性的，javaType表示java的类型property表示属性名-->
+        <association property="user" javaType="user">
+            <!--主表的属性和数据库列名-->
+            <id property="id" column="id"></id>
+            <result property="username" column="username"></result>
+            <result property="sex" column="sex"></result>
+            <result property="birthday" column="birthday"></result>
+            <result property="address" column="address"></result>
+        </association>
+    </resultMap>
+    <!--利用继承account类的方式实现一对一查询-->
+    <select id="selectAccounts" resultType="accountUser">
+        SELECT a.id aid,a.uid,a.money,u.username,u.address FROM `account` a,`user` u WHERE a.uid=u.id
+    </select>
+
+    <select id="findAll" resultMap="accountMap">
+        SELECT a.id aid,a.uid,a.money,u.* FROM `account` a,`user` u WHERE a.uid=u.id
+    </select>
+</mapper>
+```
+
+
+
+### 2. 一对多查询
+
+
+
+​			经过了上面的一对一查询，相信已经对多对一查询有了思路，只要在主表的实体类中封装一个从表的集合就行了
+
+```java
+private List<Account> accounts;
+
+public List<Account> getAccounts() {
+    return accounts;
+ }
+
+public void setAccounts(List<Account> accounts) {
+    this.accounts = accounts;
+}
+```
+
+​			sql语句，这时呢，我们要查的是一个用户和对应的所有账户，那么这时候就需要将所有的用户都查出来，不管有没有账户，那就需要用到左外连接或者是右外连接了
+
+```sql
+select u.*,a.id aid,a.uid,a.money from account a
+right outer join user u
+on u.id=a.uid
+```
+
+​			然后就是mapper映射文件了
+
+```xml
+<mapper namespace="com.dajiao.dao.UserDao">
+
+    <resultMap id="userMap" type="user">
+        <id property="id" column="id"></id>
+        <result property="username" column="username"></result>
+        <result property="address" column="address"></result>
+        <result property="sex" column="sex"></result>
+        <result property="birthday" column="birthday"></result>
+        <!--collection属性表示一对多，从表实体类集合，ofType表示集合的泛型类型-->
+        <collection property="accounts" ofType="account">
+            <!--配置从表的属性和数据库列名，注意起了别名需要写上别名-->
+            <id property="id" column="aid"></id>
+            <result property="uid" column="uid"></result>
+            <result property="money" column="money"></result>
+        </collection>
+    </resultMap>
+
+    <select id="selectUsers" resultMap="userMap">
+        SELECT a.id aid,a.uid,a.money,u.* FROM `account` a
+        RIGHT OUTER JOIN `user` u ON a.uid=u.id
+    </select>
+</mapper>
+```
+
+
+
+### 3. 多对多查询
+
+​		
+
+​			那么多对多的查询在mybatis其实已经不是难题了，跟上面的一对多是差不多的，因为多对多细致的讲其实可以说成一对多，但是在mybatis查询多对多不难，就是建表的过程需要慎重
+
+​			首先，要想实现多对多那么就需要建立一个中间表，例如用户和角色的关系就是一个多对多的关系，我们可以在王者峡谷里面使用各种英雄，各种英雄也不是一个人的专属，用对应着许多用户，这就是多对多的关系了，那么中间表呢就同时有着来自这两个表中的外键约束，首先，我们可以建立角色表
+
+```sql
+create table role(
+	id int primary key auto_increment,
+    role_name varchar(20),
+    role_desc varchar(100)
+)
+
+INSERT  INTO `role`(`ID`,`ROLE_NAME`,`ROLE_DESC`) 
+VALUES (1,'院长','管理整个学院'),(2,'总裁','管理整个公司'),(3,'校长','管理整个学校');
+```
+
+​		然后建立中间表
+
+```sql
+create table user_role(
+	rid int,
+    uid int,
+    primary key(rid,uid),
+    foreign key rid references role (id)
+    foreign key uid feferences user (id)
+)
+
+INSERT  INTO `user_role`(`UID`,`RID`) VALUES (41,1),(45,1),(41,2);
+```
+
+​		在之后就是怎么查询了，我们可以查出角色表和中间表对应的用户表，然后使用左外连接获取所有的角色
+
+```sql
+SELECT u.*,r.id rid,r.role_name,r.role_desc FROM `role` r
+LEFT OUTER JOIN user_role ur
+ON r.id=ur.rid
+LEFT OUTER JOIN `user` u
+ON ur.uid=u.id
+```
+
+​	然后建立角色的实体类
+
+```java
+public class Role {
+
+    private Integer id;
+    private String roleName;
+    private String roleDesc;
+
+    List<User> users;
+    
+    get/set/toString.....
+}
+```
+
+​		然后就是mapper映射文件
+
+```xml
+<mapper namespace="com.dajiao.dao.RoleDao">
+
+    <resultMap id="roleMap" type="role">
+        <id property="id" column="rid"></id>
+        <result property="roleName" column="role_name"></result>
+        <result property="roleDesc" column="role_desc"></result>
+        <collection property="users" ofType="user">
+            <id property="id" column="id"></id>
+            <result property="username" column="username"></result>
+            <result property="address" column="address"></result>
+            <result property="sex" column="sex"></result>
+            <result property="birthday" column="birthday"></result>
+        </collection>
+    </resultMap>
+
+    <select id="findAll" resultMap="roleMap">
+        SELECT u.*,r.id rid,r.role_name,r.role_desc FROM `role` r
+        LEFT OUTER JOIN user_role ur
+        ON r.id=ur.rid
+        LEFT OUTER JOIN `user` u
+        ON ur.uid=u.id
+    </select>
+
+</mapper>
+```
+
+
+
+​			其实查询用户所对应的角色也是差不多的做法，就不在编写了
