@@ -30,6 +30,17 @@
 	  * [1. 一对一查询](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#1-一对一查询)
 	  * [2. 一对多查询](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#2-一对多查询)
 	  * [3. 多对多查询](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#3-多对多查询)
+	* [mybatis的延迟加载](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#mybatis的延迟加载)
+	* [mybatis的缓存](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#mybatis的缓存)
+	  * [1. mybatis中的一级缓存](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#1-mybatis中的一级缓存)
+	  * [2. mybatis的二级缓存](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#2-mybatis的二级缓存)
+	* [Mybatis的注解开发](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#Mybatis的注解开发)
+	* [注解开发处理实体类属性和数据库列名不一致](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#注解开发处理实体类属性和数据库列名不一致)
+	* [注解开发实现多表查询](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#注解开发实现多表查询)
+	  * [1. 一对一查询](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#1-一对一查询)
+	  * [2. 一对多查询](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#2-一对多查询)
+	  * [3. 多对多查询](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#3-多对多查询)
+	* [mybatis注解开启二级缓存](https://github.com/dajiao918/Grow/blob/main/elseNote/MyBatis.md#mybatis注解开启二级缓存)
 
 
 
@@ -2021,4 +2032,851 @@ public class Role {
 
 
 
-​			其实查询用户所对应的角色也是差不多的做法，就不在编写了
+​			其实查询用户所对应的角色也是差不多的做法，就不再编写了
+
+
+
+## mybatis的延迟加载
+
+
+
+​				延迟加载：就是需要数据的时候才加载，不需要用到数据的时候就不进行加载。延迟加载也称为懒加载（lazyLoading），这样做的好处是先查询单表，如果有需要的话再去关联表进行关联查询，这样就能大大提高数据库的性能，因为查询单表要比查询多表的效率快得多。
+
+​				那什么时候需要用到延迟加载呢：当查询一对多的时候，这个时候可以使用延迟加载，比如说，我们要查询用户信息，用户又包含着多个账户，那么我们可以先查询用户信息，如果有需要的话再去查询账户信息
+
+​			在一对多的查询中，查询的结果是：
+
+```java
+Opening JDBC Connection
+Created connection 1976870338.
+Setting autocommit to false on JDBC Connection [com.mysql.cj.jdbc.ConnectionImpl@75d4a5c2]
+==>  Preparing: select * from user 
+==> Parameters: 
+<==    Columns: id, username, birthday, sex, address
+<==        Row: 41, hello，myWorld, 2021-01-29 04:01:20, 男, null
+====>  Preparing: select * from role where id in (select rid from user_role where uid=?) 
+====> Parameters: 41(Integer)
+<====    Columns: id, role_name, role_desc
+<====        Row: 1, 院长, 管理整个学院
+<====        Row: 2, 总裁, 管理整个公司
+<====      Total: 2
+    ......
+```
+
+​		可以看到，我们是把用户信息和账户信息同时查询出来的
+
+​		想要开启延迟加载，首先需要在主配置文件SqlMapConfig.xml文件中设置settings属性
+
+```xml
+ <!--延迟加载的全局开关。当开启时，所有关联对象都会延迟加载。 
+	特定关联关系中可通过设置 fetchType 属性来覆盖该项的开关状态。
+-->
+<setting name="lazyLoadingEnabled" value="true" />
+<!--开启时，任一方法的调用都会加载该对象的所有延迟加载属性。
+ 	否则，每个延迟加载属性会按需加载,默认是false,可以不写
+-->
+<setting name="aggressiveLazyLoading" value="false"/>
+```
+
+​	
+
+```java
+//Account类
+/**
+ * @program: study-mybatis-createMybatis
+ * @description:
+ * @author: Mr.Yu
+ * @create: 2021-01-28 21:49
+ **/
+private Integer id;
+    private Integer uid;
+    private Double money;
+
+    private User user;
+
+    public User getUser() {
+        return user;
+    }
+
+    public void setUser(User user) {
+        this.user = user;
+    }
+
+	get/set/toString
+}
+
+//AccountDao接口
+public interface AccountDao {
+    List<Account> findAll();
+}
+
+//User类
+public class User {
+
+    private Integer id;
+    private String username;
+    private String address;
+    private Date birthday;
+    private String sex;
+    ...
+}
+```
+
+
+
+​		这个时候就不能再用左外连接去同时查询双表了，因为我们不想同时查询两张表，所以需要在我们的映射mapper文件中修改
+
+```xml
+<mapper namespace="com.dajiao.dao.UserDao">
+
+    <resultMap id="userMap" type="user">
+        <id property="id" column="id"></id>
+        <result property="username" column="username"></result>
+        <result property="address" column="address"></result>
+        <result property="sex" column="sex"></result>
+        <result property="birthday" column="birthday"></result>
+        <!--select属性表示想要查询的关联对象的接口中的方法，ofType表示关联属性的类型，property表示关联属性名
+			column属性表示用当前实体类的什么属性去查询关联属性	
+		-->
+        <collection property="accounts" ofType="account" column="id"                                                             select="com.dajiao.dao.AccountDao.findAccountByUid"></collection>             
+    </resultMap>
+
+    <select id="selectUsers" resultMap="userMap">
+        SELECT * FROM user
+    </select>
+
+    <select id="findUserById" parameterType="int" resultType="user" >
+        select * from user where id=#{id}
+    </select>
+
+</mapper>
+```
+
+​			
+
+​		然后就是accountDao接口的配置文件修改
+
+```xml
+<!--添加select属性指定的方法，这个时候可以不在accountDao接口中编写此方法，因为不需要代理对象去获取全限定方法名称-->  
+<select id="findAccountByUid" resultType="account" parameterType="int">
+    select * from account where uid=#{id}
+</select>
+```
+
+​	*  测试类
+
+```java
+@Test
+    public void select(){
+        List<User> users = userDao.selectUsers();
+        for (User user : users) {
+            System.out.println("-----------用户信息----------");
+            System.out.println("用户：" + user);
+            for (Account account : user.getAccounts()) {
+                System.out.println("账户：" + account);
+            }
+        }
+    }
+```
+
+
+
+​		测试结果：
+
+```java
+==>  Preparing: SELECT * FROM user 
+==> Parameters: 
+<==    Columns: id, username, birthday, sex, address
+    .......
+<==      Total: 16
+-----------用户信息----------
+==>  Preparing: select * from account where uid=? 
+==> Parameters: 41(Integer)
+<==      Total: 0
+用户：User{id=41, username='hello，myWorld', address='null', birthday=Fri Jan 29 12:01:20 CST 2021, sex='男'}
+-----------用户信息----------
+==>  Preparing: select * from account where uid=? 
+==> Parameters: 42(Integer)
+<==      Total: 0
+用户：User{id=42, username='小二王', address='北京金燕龙', birthday=Mon Jan 01 08:00:00 CST 2018, sex='女'}
+-----------用户信息----------
+```
+
+​		可以看到，当我们执行输出方法时结果才会去现查询，不会在一开始就查询，当我们把输出的语句注释后，查询结果是：
+
+```java
+==>  Preparing: SELECT * FROM user 
+==> Parameters: 
+<==    Columns: id, username, birthday, sex, address
+...
+<==      Total: 16
+Resetting autocommit to true on JDBC Connection [com.mysql.cj.jdbc.ConnectionImpl@7817fd62]
+Closing JDBC Connection [com.mysql.cj.jdbc.ConnectionImpl@7817fd62]
+```
+
+​		只会查询user类的数据，而不会查询关联数据accounts
+
+
+
+## mybatis的缓存
+
+
+
+​			缓存：缓存就是存在于内存中的临时数据
+
+​			使用缓存的好处是减少和数据库交互的次数，提高执行的效率，但缓存也是有针对性的，对于不经常修改的数据且数据的正确性和结果关联性不大的，就适用于缓存，那么经常改变的数据和数据和结果关联性特别大的，不适用于缓存
+
+​			
+
+### 1. mybatis中的一级缓存
+
+​			mybatis 的一级缓存，指的是SqlSession对象中的缓存，当我们查询到了结果后，查询的结果会存入一个sqlSession为我们提供的一个区域中，这个区域是Map集合，当我们想要再次拿出来用的时候，mybatis会在SqlSession中查询，有的话直接拿出来用
+
+```java
+public class DefaultSqlSession implements SqlSession {
+    
+    //查询的时候进行一些列操作
+	@Override
+  public <E> List<E> selectList(String statement, Object parameter, RowBounds rowBounds) {
+    try {
+      	  MappedStatement ms = configuration.getMappedStatement(statement);
+        //跳转到BaseExeCutor类
+    	  return executor.query(ms, wrapCollection(parameter), rowBounds, Executor.NO_RESULT_HANDLER);
+    } catch (Exception e) {
+     		 throw ExceptionFactory.wrapException("Error querying database.  Cause: " + e, e);
+    } 	 finally {
+     		 ErrorContext.instance().reset();
+   		 }
+    }
+    
+    
+        @Override
+      public void commit() {
+        commit(false);
+      }
+
+    //sqlsession的commit方法
+      @Override
+      public void commit(boolean force) {
+        try {
+          executor.commit(isCommitOrRollbackRequired(force));
+          dirty = false;
+        } catch (Exception e) {
+          throw ExceptionFactory.wrapException("Error committing transaction.  Cause: " + e, e);
+        } finally {
+          ErrorContext.instance().reset();
+        }
+      }
+    
+    //SqlSession的清理缓存方法
+	@Override
+ 	public void clearCache() {
+ 	   executor.clearLocalCache();
+    }
+}
+
+public abstract class BaseExecutor implements Executor {
+    
+    //缓存属性
+	protected PerpetualCache localCache;
+  	protected PerpetualCache localOutputParameterCache;
+    
+    //查询方法执行
+    @Override
+  public <E> List<E> query(MappedStatement ms, Object parameter, RowBounds rowBounds, ResultHandler resultHandler) throws SQLException {
+      BoundSql boundSql = ms.getBoundSql(parameter);
+      //存储临时数据
+      CacheKey key = createCacheKey(ms, parameter, rowBounds, boundSql);
+      return query(ms, parameter, rowBounds, resultHandler, key, boundSql);
+  }
+
+    //关闭sqlsession的方法
+    @Override
+  public void commit(boolean required) throws SQLException {
+    if (closed) {
+      throw new ExecutorException("Cannot commit, transaction is already closed");
+    }
+      //清理缓存
+      clearLocalCache();
+      flushStatements();
+      if (required) {
+        transaction.commit();
+      }
+   }
+    
+    //清理缓存
+    @Override
+  	public void clearLocalCache() {
+    if (!closed) {
+      localCache.clear();
+      localOutputParameterCache.clear();
+    }
+  }
+}
+
+//缓存类
+public class PerpetualCache implements Cache {
+
+ 	 private final String id;
+	//缓存实现类型Map集合
+ 	 private Map<Object, Object> cache = new HashMap<>();
+	
+    //清理缓存
+    @Override
+ 	public void clear() {
+  	  cache.clear();
+ 	}
+}
+```
+
+
+
+​		可以测试一下查询一个user数据的时候
+
+```java
+SqlSession sqlSession;
+    InputStream in;
+    UserDao userDao;
+    SqlSessionFactory factory;
+
+    @Before//表示在测试方法执行之前执行
+    public void init() throws IOException {
+
+        in = Resources.getResourceAsStream("SqlMapConfig.xml");
+        factory = new SqlSessionFactoryBuilder().build(in);
+    }
+
+    @After//在测试方法执行之后执行
+    public void destroy() throws IOException {
+        sqlSession.commit();
+        sqlSession.close();
+        in.close();
+    }
+
+    @Test
+    public void select(){
+        sqlSession = factory.openSession();
+        //获取代理对象
+        userDao = sqlSession.getMapper(UserDao.class);
+        //查询41号用户
+        User user = userDao.selectUser(41);
+        //没有实现toString方法，输出地址
+        System.out.println("我是user-------"+user);
+        //继续查询41号用户
+        User user1 = userDao.selectUser(41);
+        ystem.out.println("我是user1------"+user1);
+         //判断变量是否是一个地址
+        System.out.println(user==user1?"我们指的是一个对象":"我们指的不是一个对象");
+      
+    }
+```
+
+测试结果：
+
+```java
+Created connection 565881091.
+Setting autocommit to false on JDBC Connection [com.mysql.cj.jdbc.ConnectionImpl@21baa903]
+    //只查询一次
+==>  Preparing: SELECT * FROM user where id=? 
+==> Parameters: 41(Integer)
+<==    Columns: id, username, birthday, sex, address
+<==        Row: 41, hello，myWorld, 2021-01-29 04:01:20, 男, null
+<==      Total: 1
+我是user-------com.dajiao.domain.User@2b95e48b
+Cache Hit Ratio [com.dajiao.dao.UserDao]: 0.0
+我是user1------com.dajiao.domain.User@2b95e48b
+我们指的是一个对象
+Resetting autocommit to true on JDBC Connection [com.mysql.cj.jdbc.ConnectionImpl@21baa903]
+```
+
+​		
+
+​		上面的源码已经给出sqlSession的实现类DefaultSession有一个clearCache方法可以清理缓存，所以这里依然可以测试一下
+
+```java
+@Test
+    public void testClearCache(){
+
+        sqlSession = factory.openSession();
+        userDao = sqlSession.getMapper(UserDao.class);
+        User user = userDao.selectUser(41);
+        System.out.println("我是user-------"+user);
+
+        //清理缓存
+        sqlSession.clearCache();
+
+        userDao = sqlSession.getMapper(UserDao.class);
+        User user1 = userDao.selectUser(41);
+        System.out.println("我是user1-------"+user1);
+        System.out.println(user==user1?"我们指的是一个对象":"我们指的不是一个对象");
+    }
+```
+
+测试结果：
+
+```java
+Opening JDBC Connection
+Created connection 1101184763.
+Setting autocommit to false on JDBC Connection [com.mysql.cj.jdbc.ConnectionImpl@41a2befb]
+    //查询第一次*/*/
+==>  Preparing: SELECT * FROM user where id=? 
+==> Parameters: 41(Integer)
+<==    Columns: id, username, birthday, sex, address
+<==        Row: 41, hello，myWorld, 2021-01-29 04:01:20, 男, null
+<==      Total: 1
+我是user-------com.dajiao.domain.User@21b2e768
+Cache Hit Ratio [com.dajiao.dao.UserDao]: 0.0
+    //查询第二次/*/*
+==>  Preparing: SELECT * FROM user where id=? 
+==> Parameters: 41(Integer)
+<==    Columns: id, username, birthday, sex, address
+<==        Row: 41, hello，myWorld, 2021-01-29 04:01:20, 男, null
+<==      Total: 1
+我是user1-------com.dajiao.domain.User@5609159b
+我们指的不是一个对象
+Resetting autocommit to true on JDBC Connection [com.mysql.cj.jdbc.ConnectionImpl@41a2befb]
+
+```
+
+
+
+当我们关闭sqlsession（commit），执行update，insert，delete方法时，都会清理缓存.......
+
+
+
+### 2. mybatis的二级缓存
+
+
+
+​		二级缓存是 mapper 映射级别的缓存，多个 SqlSession 去操作同一个 Mapper 映射的 sql 语句，多个
+
+SqlSession 可以共用二级缓存，二级缓存是跨 SqlSession 的。
+
+​		想要获取二级缓存，首先需要在SqlMapConfig,xml文件配置settings
+
+```java
+<!--全局性地开启或关闭所有映射器配置文件中已配置的任何缓存。默认是true，其实可以不写-->
+<setting name="cacheEnabled" value="true"/>
+```
+
+​		然后去对应的dao接口的配置文件修改配置
+
+```xml
+<mapper namespace="com.dajiao.dao.UserDao">
+    <!--设置cahce标签-->
+    <cache></cache>
+    <!--对user 的usercache属性改为true-->
+    <select id="selectUser" resultType="user" parameterType="int" useCache="true">
+        SELECT * FROM user where id=#{id}
+    </select>
+</mapper>
+```
+
+​		测试：
+
+```java
+ @Test
+    public void testCache(){
+
+       sqlSession = factory.openSession();
+        userDao = sqlSession.getMapper(UserDao.class);
+        User user = userDao.selectUser(41);
+        System.out.println("我是user-------"+user);
+
+        sqlSession.close();
+
+        sqlSession = factory.openSession();
+        userDao = sqlSession.getMapper(UserDao.class);
+        User user1 = userDao.selectUser(41);
+        System.out.println("我是user1-------"+user1);
+        System.out.println(user==user1?"我们指的是一个对象":"我们指的不是一个对象");
+    }
+```
+
+结果：
+
+```java
+Opening JDBC Connection
+Created connection 1101184763.
+Setting autocommit to false on JDBC Connection [com.mysql.cj.jdbc.ConnectionImpl@41a2befb]
+==>  Preparing: SELECT * FROM user where id=? 
+==> Parameters: 41(Integer)
+<==    Columns: id, username, birthday, sex, address
+<==        Row: 41, hello，myWorld, 2021-01-29 04:01:20, 男, null
+<==      Total: 1
+我是user-------com.dajiao.domain.User@21b2e768
+Resetting autocommit to true on JDBC Connection [com.mysql.cj.jdbc.ConnectionImpl@41a2befb]
+Closing JDBC Connection [com.mysql.cj.jdbc.ConnectionImpl@41a2befb]
+Returned connection 1101184763 to pool.
+Cache Hit Ratio [com.dajiao.dao.UserDao]: 0.5
+我是user1-------com.dajiao.domain.User@5ab9e72c
+我们指的不是一个对象
+```
+
+可以看到sql语句只查询一次，但是两个变量确实不相等的，这是因为，二级缓存是将user 的数据拿出来以序列化的形式去存储的，所以此时我们的实体类需要实现Serializable序列化接口，每次都会将这数据重新封装为一个新的user对象，因此两个变量指的不是同一个对象
+
+
+
+## Mybatis的注解开发
+
+
+
+​		这几年来注解开发越来越流行，Mybatis 也可以使用注解开发方式，这样我们就可以减少编写 Mapper 映射文件了，开发效率非常的高
+
+​		mybatis 的常用注解说明：
+
+```xml
+@Insert:实现新增
+@Update:实现更新
+@Delete:实现删除
+@Select:实现查询
+@Result:实现结果集封装
+@Results:可以与@Result 一起使用，封装多个结果集
+@ResultMap:实现引用@Results 定义的封装
+@One:实现一对一结果集封装
+@Many:实现一对多结果集封装
+@SelectProvider: 实现动态 SQL 映射
+@CacheNamespace:实现注解二级缓存的使用
+```
+
+
+
+### 1. 注解实现基本的CURD
+
+建立新的Maven工程，建立user实体类
+
+```java
+/**
+ * @program: study-mybatis-createMybatis
+ * @description:
+ * @author: Mr.Yu
+ * @create: 2021-01-29 11:39
+ **/
+public class User {
+
+    private Integer id;
+    private String username;
+    private String address;
+    private Date birthday;
+    private String sex;
+    
+    get/set/toString...
+}
+```
+
+
+
+主配置文件SqlMapConfig.xml文件的配置
+
+```xml
+<configuration>
+
+    <settings>
+        <setting name="logImpl" value="STDOUT_LOGGING"/>
+    </settings>
+
+    <typeAliases>
+        <package name="com.dajiao.domain"/>
+    </typeAliases>
+
+    <environments default="mydb">
+        <environment id="mydb">
+            <transactionManager type="JDBC"/>
+            <dataSource type="POOLED">
+                <property name="driver" value="com.mysql.cj.jdbc.Driver"/>
+                <property name="url" value="jdbc:mysql://localhost:3306/mybatis?serverTimezone=UTC"/>
+                <property name="username" value="root"/>
+                <property name="password" value="qwer"/>
+            </dataSource>
+        </environment>
+    </environments>
+
+    <mappers>
+       <package name="com.dajiao.dao"/>
+    </mappers>
+
+</configuration>
+```
+
+
+
+dao接口的编写
+
+```java
+public interface UserDao {
+
+    //使用select注解查询user
+    @Select("select * from user")
+    List<User> findAll();
+    
+    //使用insert注解插入user
+     @Insert("insert into user(username,address,sex,birthday) values(#{username},#{address},#{sex},#{birthday})")
+    void insertUser(User user);
+
+    //使用update注解修改user
+    @Update("update user set username=#{username},sex=#{sex},address=#{address},birthday=#{birthday} where id=#{id}")
+    void updateUser(User user);
+
+    //使用delete注解删除user
+    @Delete("delete from user where id=#{uid}")
+    void deleteUser(Integer id);
+
+    //使用select注解查询一个
+    @Select("select * from user where id=#{uid}")
+    User findUserById(Integer id);
+
+    //使用select注解模糊查询
+    @Select("select * from user where username like #{username}")
+//    @Select("select * from user where username like '%${value}%'")
+    List<User> findUsersByName(String name);
+
+    //使用select注解进行聚合函数
+    @Select("select count(*) from user")
+    int findTotal();
+}
+```
+
+
+
+​			当我们使用注解开发时，使用了注解就不能配置每个接口的配置文件了，不然的话mybatis不能识别你到底是想用哪种方式进行查询，测试类还是一如既往的，获取sqlSession对象，并且获取代理对象，执行相应的方法
+
+
+
+## 注解开发处理实体类属性和数据库列名不一致
+
+
+
+​		实体类
+
+```java
+/**
+ * @program: study-mybatis-createMybatis
+ * @description:
+ * @author: Mr.Yu
+ * @create: 2021-01-29 12:17
+ **/
+public class User {
+
+    private Integer userId;
+    private String userName;
+    private String userAddress;
+    private String userSex;
+    private String userBirthday;
+    
+    ....
+}
+```
+
+
+
+dao接口
+
+```java
+import com.dajiao.domain.User;
+import org.apache.ibatis.annotations.Result;
+import org.apache.ibatis.annotations.ResultMap;
+import org.apache.ibatis.annotations.Results;
+import org.apache.ibatis.annotations.Select;
+
+import java.util.List;
+
+public interface UserDao {
+    
+    
+    @Select("select * from user")
+    //id表示唯一标识，其他的方法可以使用@ResultMap注解引用此结果集
+    @Results(id = "userMap",value = {
+        //id指定是否是主键，默认为false，property表示属性名，column表示数据库列名
+        @Result(id = true,property = "userId", column="id"),
+        @Result(property = "userName", column = "username"),
+        @Result(property = "userAddress", column = "address"),
+        @Result(property = "userSex", column = "sex"),
+        @Result(property = "userBirthday", column = "birthday")
+    })
+    List<User> findAll();
+    
+   @Select("select * from user where id=#{id}")
+    @resultMap(value="userMap")
+    User findUserById();
+    
+    @Select("select * from user where username like #{username}")
+//    @Select("select * from user where username like '%${value}%'")
+    @ResultMap(value = "userMap")
+    List<User> findUsersByName(String name);
+}
+```
+
+​	
+
+​		其实和配置映射文件时大同小异的
+
+
+
+### 注解开发实现多表查询
+
+
+
+### 1. 一对一查询
+
+​		
+
+​		实现复杂关系映射之前我们可以在映射文件中通过配置<resultMap>来实现，在使用注解开发时我们需要借
+
+助@Results 注解，@Result 注解，@One 注解，@Many 注解
+
+```java
+/**
+ * @program: study-mybatis-createMybatis
+ * @description:
+ * @author: Mr.Yu
+ * @create: 2021-01-29 12:38
+ **/
+public interface AccountDao {
+
+    @Select("select * from account")
+    //@Results注解代替了<resultMap>标签
+    /*
+    id表示唯一标识，就是resultMap中的id属性
+    value是一个Result注解的数组类型
+    id表示是否是主键，默认为false
+    property表示属性名
+    column表示数据库列名
+    one表示一对一查询，里面添加@one注解，@one注解里面有两个属性
+    	这里的column属性表示查询关联数据的数据源
+        select表示<association>标签的select属性，用于指定关联表的接口的相应全限定方法名称，这个时候关联的接口内需要定义此方法
+        fetchType表示是否开启延迟加载，默认是不开启，有三个值:DEFAULT（默认）,LAZY(延迟),EAGER（立即加载）
+    */
+    @Results(id="accountMap", value = {
+            @Result(id = true,property = "id",column = "id"),
+            @Result(property = "uid",column = "uid"),
+            @Result(property = "money",column = "money"),
+            @Result(property = "user",column = "uid",one = @One(select = "com.dajiao.dao.UserDao.findUserById",fetchType = FetchType.EAGER))
+    })
+    List<Account> findAll();
+
+    @Select("select * from account where uid=#{uid}")
+    List<Account> findAccountsByUid(Integer uid);
+}
+```
+
+
+
+```java
+@Select("select * from user where id=#{uid}")
+User findUserById(Integer uid);
+```
+
+
+
+​		以上就实现了注解的一对一查询
+
+
+
+### 2. 一对多查询
+
+​		
+
+​			一对多查询需要使用Result注解里面的many属性，many属性定义了，@many注解，用于多对多的查询
+
+```java
+ @Select("select * from user")
+    @Results(value = {
+            @Result(id = true,property = "id",column = "id"),
+            @Result(property = "username",column = "username"),
+            @Result(property = "address",column = "address"),
+            @Result(property = "birthday",column = "birthday"),
+            @Result(property = "sex",column = "sex"),
+        //多对多需要延迟加载古fetchType=FetchType.LAZY，select和一对一是一样的
+            @Result(property = "accounts",column = "id" ,many = @Many(select = "com.dajiao.dao.AccountDao.findAccountsByUid",fetchType = FetchType.LAZY))
+    })
+```
+
+```java
+/**
+ * @program: study-mybatis-createMybatis
+ * @description:
+ * @author: Mr.Yu
+ * @create: 2021-01-29 12:38
+ **/
+public interface AccountDao {
+
+    @Select("select * from account where uid=#{uid}")
+    List<Account> findAccountsByUid(Integer uid);
+}
+```
+
+
+
+​		以上就实现了一对多的查询
+
+
+
+### 3. 多对多查询
+
+​	
+
+​			其实多对多查询根一对多查询时差不太多的，不一样的部分就是sql语句的编写
+
+那我们需要在最后一个@Result注解传入查询关联属性的数据源，也就是user 的id，我们此时不可能再去建立一个中间表的实体类，那么我们就需要先获取user的id，用user的id和中间表的uid进行双表查询，获取了若干个role的rid，这时候皆就可以利用in关键字查询user所对应的角色了，所以这里我们要用子查询
+
+```sql
+select * from role where id in (select rid from user_role where uid=#{uid})
+#uid就是从userDao接口的@Result注解传来的数据源，在数据库里面是不能执行的，需要通过mybatis执行
+```
+
+```java
+/**
+ * @program: study-mybatis-createMybatis
+ * @description:
+ * @author: Mr.Yu
+ * @create: 2021-01-29 13:13
+ **/
+public interface UserDao {
+    @Select("select * from user")
+    @Results(value = {
+            @Result(id = true,property = "id",column = "id"),
+            @Result(property = "username",column = "username"),
+            @Result(property = "address",column = "address"),
+            @Result(property = "sex",column = "sex"),
+            @Result(property = "birthday",column = "birthday"),
+            @Result(property = "roles",column = "id",
+                    many = @Many(select = "com.dajiao.dao.RoleDao.selectRoleByUid",
+                                 fetchType = FetchType.LAZY ))
+    })
+    List<User> findAll();
+}
+```
+
+```java
+public interface RoleDao {
+    
+    @Select("select * from role where id in (select rid from user_role where uid=#{uid})")
+    @ResultMap(value = "roleMap")
+    List<Role> selectRoleByUid(Integer Uid);
+}
+
+```
+
+
+
+## mybatis注解开启二级缓存
+
+
+
+​		在SqlMapConfig.xml主配置文件中
+
+```xml
+<settings>
+<!-- 开启二级缓存的支持 --> <setting name="cacheEnabled" value="true"/>
+</settings>
+```
+
+
+
+​			在持久层dao接口中
+
+```java
+@CacheNamespace(blocking=true)//mybatis 基于注解方式实现配置二级缓存
+public interface IUserDao {}
+```
+
