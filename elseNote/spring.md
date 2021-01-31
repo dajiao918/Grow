@@ -11,11 +11,6 @@
   * [spring的依赖注入](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#spring的依赖注入)
     * [1. 构造器注入](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#1-构造器注入)
     * [2. set方法注入](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#2-set方法注入)
-  * * [](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md)
-    * [](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md)
-    * [](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md)
-    * [](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md)
-
 
 
 ## 概述
