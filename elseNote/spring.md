@@ -11,7 +11,14 @@
   * [spring的依赖注入](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#spring的依赖注入)
     * [1. 构造器注入](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#1-构造器注入)
     * [2. set方法注入](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#2-set方法注入)
-
+  * [spring注解开发](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#spring注解开发)
+    * [基于xml方式IOC的CRUD](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#基于xml方式IOC的CRUD)
+      * [1.1 @Autowired注解的细节](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#1.1-@Autowired注解的细节)
+  * [注解方式实现案例](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#注解方式实现案例)
+    * [1. 注解的作用和细节](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#1-注解的作用和细节)
+    * [2. 在CRUD中使用注解](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#2-在CRUD中使用注解)
+    * [3. spring新注解](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#3-spring新注解)
+  * [整合junit和spring](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#整合junit和spring)
 
 ## 概述
 
@@ -387,7 +394,66 @@ id都是用以获取对象的唯一标识
 
 
 
-​			依赖注入：Dependency Injection
+```java
+//dao层
+public inteface AccountDao{
+    void saveMoney();
+}
+
+public class AccountDaoImpl implements AccountDao{
+    
+    @Override
+    public void saveMoney(){
+        System.out.println("存入1000元");
+    }
+}
+
+//service层
+public inteface AccountService{
+    void saveMoney();
+}
+
+public class AccountServiceImpl implements AccountService{
+    
+    AccountDao accountDao = new AccountDaoImpl();
+    
+    @Override
+    public void saveMoney(){
+        accountDao.saveMoney();
+    }
+}
+```
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+        http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+    <!--id标签表示自定义获取对象的标识符，class标签表示想要获取的对象的类的全限定类名-->
+    <bean id="accountDao" class="com.dajiao.dao.impl.AccountDaoImpl"></bean>
+    <bean id="accountService" class="com.dajiao.dao.impl.AccountServiceImpl"></bean>
+</beans>
+```
+
+
+
+```java
+public class Client{
+    
+    public static void main(String[] args) {
+        
+        //首先获取容器，利用配置文件的文件路径
+        ApplicationContext context = new ClassPathXmlApplicationContext("bean.xml");
+        //根据id获取对象
+        AcountService service = (AccountService)context.getBean("accountService");
+        service.saveAccount();
+    }
+}
+```
+
+​		这个时候其实可以清晰的看到，我们在service层中的impl里面还是使用了new关键字来创建AccountDao对象，如果不进行实例化的话是不能调用器方法的，而这个时候AccountDao是AccountServiceImpl的属性，想要不使用new关键字的方法来创建AccountDao对象，这就涉及到了spring的核心：依赖注入：Dependency Injection
 
 ​			它是spring框架核心IOC的具体实现，我们在编写程序时，将创建对象的控制反转，交给spring 来创建，控制反转是一种思想，是一个能解决问题的一种可能的结果，而依赖注入是一种最典型的实现方法，由第三方来控制依赖，把他通过构造函数，属性或者工厂模式等方法，注入到类中，上方我们都是创建了一个对象，并没有什么实例化属性的情况，一般类中有属性是很常见的，所以依赖注入就是用于对类进行属性赋值操作
 
@@ -406,12 +472,12 @@ public class AccountServiceImpl implements AccountService {
 	
     private String name;//String类型
     private int age;//基本类型
-    private Date date;//bean对象类型
+    private AccountDao accountDao;//bean对象类型
     
-    public AccountServiceImpl(String name, int age, Date date) {
+    public AccountServiceImpl(String name, int age, AccountDao accountDao) {
         this.name = name;
         this.age = age;
-        this.date = date;
+        this.accountDao = accountDao;
     }
     
 }
@@ -425,16 +491,18 @@ public class AccountServiceImpl implements AccountService {
 <bean id="accountService" class="com.dajiao.service.impl.AccountServiceImpl">
 	<constructor-arg name="name" value="张三"></constructor-arg>
     <constructor-arg name="age" value="18"></constructor-arg>
-    <constructor-arg name="date" ref="now"></constructor-arg>
+    <constructor-arg name="accountDao" ref="accountDao"></constructor-arg>
     <!--<constructor-arg index=0 value="张三"></constructor-arg>
     <constructor-arg index=1 value="18"></constructor-arg>
-    <constructor-arg index=2 ref="now"></constructor-arg>
+    <constructor-arg index=2 ref="accountDao"></constructor-arg>
     <constructor-arg type="java.lang.String" value="张三"></constructor-ard>
     <constructor-arg type="java.lang.Integer" value="18"></constructor-arg>
-    <constructor-arg type="java.util.Date" ref="now"></constructor-arg>-->
+    <constructor-arg type="com.dajiao.dao.impl.AccountDaoImpl" ref="now"></constructor-arg>-->
 </bean>
-<bean id="now" class="java.util.Date"></bean>
+<bean id="now" class="com.dajiao.dao.impl.AccountDaoImpl"></bean>
 ```
+
+
 
 ```xml
 constructor-arg标签用于配置构造器中的参数
@@ -448,6 +516,8 @@ constructor-arg标签用于配置构造器中的参数
 ```
 
 
+
+  			运用以上的方式之后就不用再使用new关键字了，spring框架直接帮我们创建了对象，并且依赖注入，每个属性直接被赋值，不需要我们关心，我们只需要关心如何使用即可
 
 ------
 
@@ -559,3 +629,690 @@ public class AccountServiceImpl implements AccountService {
 ```
 
 ​		其中list，array，set类型的注入可以混合使用标签，map和properties可以混合使用标签
+
+
+
+## spring注解开发
+
+
+
+​			spring中也提供了直接开发模式，xml的IOC和注解的IOC都是为了降低程序的耦合，但两种方法都是需要掌握的
+
+​			首先，我们先用xml的IOC做一个数据库CRUD小案例，先建立库和表
+
+
+
+### 基于xml方式IOC的CRUD
+
+```sql
+#创建库
+create database spring;
+#使用库
+use spring
+#创建表
+create table account(
+	id int primary key auto_increment,
+    name varchar(20) unique,
+    money double
+)
+#插入数据
+insert into account (name,money) values('alan',100),('bob',200),('cici',300)
+```
+
+
+
+在Maven工程中导入spring,mysql驱动,dbutils，c3p0，junit依赖
+
+```xml
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context</artifactId>
+            <version>5.0.1.RELEASE</version>
+        </dependency>
+
+        <dependency>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+            <version>8.0.21</version>
+        </dependency>
+
+        <dependency>
+            <groupId>commons-dbutils</groupId>
+            <artifactId>commons-dbutils</artifactId>
+            <version>1.4</version>
+        </dependency>
+
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.12</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>com.mchange</groupId>
+            <artifactId>c3p0</artifactId>
+            <version>0.9.2</version>
+        </dependency>
+</dependencies>
+```
+
+
+
+
+
+创建实体类
+
+```java
+package com.dajiao.domain;
+
+/**
+ * @author: Mr.Yu
+ * @create: 2021-01-31 20:31
+ **/
+public class Account {
+
+    private Integer id;
+    private String name;
+    private Double money;
+	
+    get/set/tostring
+}
+```
+
+
+
+创建持久层接口
+
+```java
+public interface AccountDao {
+
+    //获取全部账户信息
+    List<Account> findAccounts();
+
+    //插入账户信息
+    int insertAccount(Account account);
+
+    //修改账户信息
+    int  updateAccount(Account account);
+
+    //删除账户信息
+    int deleteAccount(Integer id);
+
+    //获取一个账户信息
+    Account findAAccountById(Integer id);
+}
+```
+
+
+
+实现持久层接口
+
+```java
+public class AccountDaoImpl implements AccountDao{
+
+    //dbutils提供的查询类，提供了各种方法
+    QueryRunner queryRunner;
+
+    //set方法方便注入依赖
+    public void setQueryRunner(QueryRunner queryRunner) {
+        this.queryRunner = queryRunner;
+    }
+
+    public List<Account> findAccounts() {
+        try {
+            return (List<Account>) queryRunner.query("select * from account", new BeanListHandler(Account.class));
+        }catch (Exception e){
+            throw new RuntimeException(e);
+        }
+    }
+
+    public int insertAccount(Account account) {
+        try {
+            int update = queryRunner.update("insert into account (name,money) values(?,?)", account.getName(),account.getMoney());
+            return update;
+        }catch (Exception e){
+            throw new RuntimeException(e);
+        }
+    }
+
+    public int updateAccount(Account account) {
+        try {
+            int update = queryRunner.update("update account set name=?,money=? where id = ?",
+                    account.getName(),account.getMoney(),account.getId());
+            return update;
+        }catch (Exception e){
+            throw new RuntimeException(e);
+        }
+    }
+
+    public int deleteAccount(Integer id) {
+        try {
+            int update = queryRunner.update("delete from account where id = ?",id);
+            return update;
+        }catch (Exception e){
+            throw new RuntimeException(e);
+        }
+    }
+
+    public Account findAAccountById(Integer id) {
+        try {
+            return queryRunner.query("select * from account where id = ?",new BeanHandler<Account>(Account.class),id);
+        }catch (Exception e){
+            throw new RuntimeException(e);
+        }
+    }
+}
+```
+
+
+
+创建业务层接口
+
+```java
+public interface AccountService {
+
+    /**
+     * 获取全部账户信息
+     * @param
+     * @return 返回全部账户
+     * */
+    List<Account> findAccounts();
+
+    /**
+     * 插入账户
+     * @param account 传入账户对象
+     * @return 返回影响的行数
+     * */
+    int insertAccount(Account account);
+
+    /**
+     * 修改账户信息
+     * @param account 传入账户对象
+     * @return 返回影响的行数
+     * */
+    int  updateAccount(Account account);
+
+    /**
+     * 删除账户信息
+     * @param id 传入删除的账户id
+     * @return 返回影响行数
+     * */
+    int deleteAccount(Integer id);
+
+    /**
+     * 根据id查询账户信息
+     * @param id 传入账户的id
+     * @return 返回一个账户信息
+     * */
+    Account findAAccountById(Integer id);
+}
+```
+
+
+
+实现业务层接口
+
+```java
+public class AccountServiceImpl implements AccountService {
+
+    //持有持久层的引用，调用其方法
+    private AccountDao dao;
+
+    //set方法方便注入依赖
+    public void setDao(AccountDao dao) {
+        this.dao = dao;
+    }
+
+    public List<Account> findAccounts() {
+        return dao.findAccounts();
+    }
+
+    public int insertAccount(Account account) {
+        return dao.insertAccount(account);
+    }
+
+    public int updateAccount(Account account) {
+        return dao.updateAccount(account);
+    }
+
+    public int deleteAccount(Integer id) {
+        return dao.deleteAccount(id);
+    }
+
+    public Account findAAccountById(Integer id) {
+        return dao.findAAccountById(id);
+    }
+}
+
+```
+
+
+
+​			上方的类基本都持有其他类的引用，所以这时候spring的依赖注入就可以大展身手了，配置bean的xml文件，文件名为：bean.xml
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+        http://www.springframework.org/schema/beans/spring-beans.xsd">
+    
+    <!--配置AccountServiceImpl类，并且根据set方法依赖注入-->
+    <bean id="accountService" class="com.dajiao.service.impl.AccountServiceImpl">
+    	<property name="dao" ref="accountDao"></property>
+    </bean>
+    <bean id="accountDao" class="com.dajiao.dao.impl.AccountDaoImpl">
+    	<property name="queryRunner" ref="runner"></property>
+    </bean>
+    
+    <!--queryrunner类中没有set方法注入数据源，只有构造器方法，此对象可能会出现线程安全问题，故使用多例对象-->
+    <bean id="runner" class="org.apache.commons.dbutils.QueryRunner" scope="prototype">
+    	<constructor-arg name="ds" ref="datasource"></constructor-arg>
+    </bean>
+    
+    <!--配置queryrunner类的ds数据源，使用的是c3p0数据源-->
+    <bean id="datasource" class="com.mchange.v2.c3p0.ComboPooledDataSource">
+        <property name="driverClass" value="com.mysql.cj.jdbc.Driver"></proerty>
+        <property name="jdbcurl" value="jdbc:mysql://localhost:3306/spring?serverTimezone=UTC"></property> 
+        <property name="user" value="root"></property>
+        <property name="password" value="qwer"></property>
+    </bean>
+      
+</beans>
+```
+
+
+
+​			当bean文件配置好以后，spring已经为我们把每个类都加入到了容器之中，并且注入依赖，我们只需要获取容器，再从容器中获取bean对象进行调用就可以了，测试代码
+
+```java
+public class AccountServiceTest {
+
+    //读取文件，获取容器
+    ApplicationContext ac = new ClassPathXmlApplicationContext("bean.xml");
+    //获取bean对象
+    AccountService service = (AccountService) ac.getBean("accountService");
+
+
+    @Test
+    public void testFindAA(){
+        List<Account> accounts = service.findAccounts();
+        for (Account account : accounts) {
+            System.out.println(account);
+        }
+    }
+}
+```
+
+测试结果：
+
+```java
+Account{id=1, name='alan', money=100.0}
+Account{id=2, name='bob', money=200.0}
+Account{id=3, name='cici', money=900.0}
+```
+
+
+
+​		可以看到上面的代码，我们并没有运用new关键字去实例化对象，而是让spring为我们创建了对象，这样一来当我们对类的属性或者构造器进行更改时，就不会将有所关联的类全部都改，而是只需要去更改配置文件的属性就行了，大大的增加了代码的可维护性
+
+
+
+#### 1.1 @Autowired注解的细节
+
+```java
+@Repository("accountDao")
+public class AccountDaoImpl implements AccountDao{
+}
+
+@Repository("accountDao2")
+public class AccountDaoImpl2 implements AccountDao {
+}
+
+@Service("accountService")
+public class AccountServiceImpl implements AccountService {
+
+    @Autowired
+    private AccountDao dao;
+}
+```
+
+​			可以看到AccountDaoImpl类AccountDaoImpl2都实现了AccountDao类，并且都加入到了spring容器中，此时spring容器中就有两个AccountDao类型的bean对象，@Autowired就不知道要注入那个bean对象才好，当我们将AccountServiceImpl的dao属性名改为accountDao或者是accountDao2时，spring才能找到，因为此时属性名和id是相同的，当然也可以保持原有的属性名，用@Qualifier或者时@Resource注解指定id即可
+
+```java
+@Autowired
+@Qualifier("accountDao")
+private AccountDao dao;
+
+//或者是
+@Resource(name = "accountDao")
+private AccountDao dao;
+```
+
+
+
+
+
+## 注解方式实现案例
+
+​	
+
+### 1. 注解的作用和细节
+
+> * @component：把当前类对象存入spring容器中value：用于指定bean对象的id，默认是当前首字母小写类名
+>   * @Service：同上，可以用于业务层的类上
+>   * @Repository：同上，可以用于持久层的类上
+>   * @Controller：同上，可以用于表面层的类上
+> * @Autowired：自动按照类型注入，但是需要spring容器中有一个唯 一对应的且类型相同的bean对象，可以用于在变量上，也可以用于方法上
+> * @Qualifier：和@Autowired注解一起使用，当spring容器中有多个同类型的bean对象和@Autowired注解作用的变量匹配时，可以用@Qualifier注解的value属性指定bean对象的id，这样就可以让@Autowired注入依赖，不然@Autowired是不会知道要注入容器中同类型bean对象的哪一个
+> * @Resource：可以代替@Qualifier注解，并且可以不和@Autowired一起使用，直接用@Resource的name属性指定bean对象，name属性不能省略
+> * @Value：用于注入基本类型和String类型数据，@Value的value属性可用spring的EL表达式指定数据的值
+> * @Scope：用于指定bean的作用范围，value属性指定范围的值
+> * @PreDestroy：用于指定销毁方法
+> * @PreConstruct：用于指定初始化方法
+
+
+
+### 2. 在CRUD中使用注解
+
+```java
+//使用Repository注解将AccountDaoImpl加入容器中，id为accountDao，Repository注解一般使用于持久层
+@Repository("accountDao")
+public class AccountDaoImpl implements AccountDao{
+
+    //使用Autowired给属性queryRunner注解注入QueryRunner类型的bean对象，前提是容器中有类型相同且唯一的bean对象，此时可以不要set方法
+    @Autowired
+    QueryRunner queryRunner;
+    
+    ....
+}
+```
+
+```java
+//使用Service注解将AccountServiceImpl加入到容器中，id为accountService，Service注解一般使用于业务层
+@Service("accountService")
+public class AccountServiceImpl implements AccountService {
+
+    @Autowired
+    private AccountDao dao;
+}
+```
+
+
+
+当我们为类配好了注解之后，必须指定在哪里配置了注解，让spring框架扫描，约束不是bean约束，而是context约束，文件名为annoBean.xml
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+        http://www.springframework.org/schema/beans/spring-beans.xsd
+        http://www.springframework.org/schema/context
+        http://www.springframework.org/schema/context/spring-context.xsd">
+    
+    <!--这样spring就会扫描com.dajiao下面的所有的类，此时的约束要使用context空间约束-->
+    <context:component-scan base-package="com.dajiao"></context:component-scan>
+	
+    <!--用于我们需要容器中有数据源和queryrunner对象，所以还需要一下配置-->
+    <bean id="runner" class="org.apache.commons.dbutils.QueryRunner">
+        <constructor-arg name="ds" ref="datasource"></constructor-arg>
+    </bean>
+
+    <bean id="datasource" class="com.mchange.v2.c3p0.ComboPooledDataSource">
+        <property name="password" value="qwer"></property>
+        <property name="user" value="root"></property>
+        <property name="jdbcUrl" value="jdbc:mysql://localhost:3306/spring?serverTimezone=UTC"></property>
+        <property name="driverClass" value="com.mysql.cj.jdbc.Driver"></property>
+    </bean>
+    
+</beans>
+```
+
+
+
+测试类
+
+```java
+/**
+ * @author: Mr.Yu
+ * @create: 2021-02-01 12:41
+ **/
+public class TestSpring {
+
+    //读取annoBean.xml文件，获取容器
+    ApplicationContext ac = new ClassPathXmlApplicationContext("annoBean.xml");
+    //获取bean对象，由于junit和spring没有整合，不能使用@AutoWired标签注入依赖
+    AccountService service = (AccountService) ac.getBean("accountService");
+
+    @Test
+    public void testFindAA(){
+        List<Account> accounts = service.findAccounts();
+        for (Account account : accounts) {
+            System.out.println(account);
+        }
+    }
+}
+```
+
+
+
+测试结果：
+
+```java
+Account{id=1, name='alan', money=100.0}
+Account{id=2, name='bob', money=200.0}
+Account{id=3, name='cici', money=900.0}
+```
+
+
+
+### 3. spring新注解
+
+​			
+
+​			当然在上面我们还是没有避免xml文件来指定和获取注解的位置和bean对象的容器加入，那么接下来就是将上面的配置文件改成注解方式获取
+
+> * @Configuration：指定当前类是一个配置类，当配置类作为AnnotationConfigApplicationContext的参数时，可以不写次注解
+> * @componentSan：替代<context:component-scan base-package="com.dajiao"></context:component-scan>标签，value[]属性可以指定要spring扫描的包
+> * @Bean：将方法返回的bean对象加入到容器中，如果方法有参数，spring框架会去容器中找有无bean对象，找的方式跟@Autowired注解一样
+> * @Import：可以导入其他的配置类，value属性指定导入配置类的字节码
+> * @PropertySource：可以指定properties文件的位置，value属性用于指定文件的路径，classpath表示类路径，有包名就写包名
+
+
+
+​			编写配置类，替代xml文件
+
+```java
+@Configuration//表示此类是一个配置类
+@ComponentScan("com.dajiao")//指定spring要扫描的注解路径
+public class SpringConfiguration{
+    
+    @Bean("runner")//将方法返回地参数加入到容器中
+    public QueryRunner getQueryRunner(DataSource dataSource){
+        return new QueryRunner(dataSource);
+    }
+    
+    @Bean("dataSource")
+    public DataSource getDataSource(){
+        
+        ComboPooledDataSource dataSource = null;
+        try {
+            dataSource = new ComboPooledDataSource();
+            dataSource.setDriverClass("com.mysql.cj.jdbc.Driver");
+            dataSource.setJdbcUrl("jdbc:mysql://localhost:3306/spring?serverTimezone=UTC");
+            dataSource.setUser("root");
+            dataSource.setPassword("qwer");
+        } catch (PropertyVetoException e) {
+            e.printStackTrace();
+        }
+        return dataSource;
+    }
+}
+```
+
+
+
+​			在测试类中使用AnnotationConfigApplicationContext注解类解析配置类
+
+```java
+public class TestSpring {
+
+    //解析配置类
+    ApplicationContext ac = new AnnotationConfigApplicationContext(SpringConfiguration.class);
+    AccountService service = (AccountService) ac.getBean("accountService");
+
+    @Test
+    public void testFindAA(){
+        List<Account> accounts = service.findAccounts();
+        for (Account account : accounts) {
+            System.out.println(account);
+        }
+    }
+}
+```
+
+​			当然，在一些大的项目中，可能有各种配置文件，然后将这些配置文件加入到一个总的配置文件进行解析，那么此时就可以使用Import注解
+
+​			例如：将SpringConfiguration类中的内容抽取到别的类中
+
+```java
+public class JDBCConfig {
+    @Bean("runner")
+    public QueryRunner getQueryRunner( DataSource dataSource) {
+        return new QueryRunner(dataSource);
+    }
+
+    @Bean("dataSource")
+    public DataSource getDataSource(){
+        
+        ComboPooledDataSource dataSource = null;
+        try {
+            dataSource = new ComboPooledDataSource();
+            dataSource.setDriverClass("com.mysql.cj.jdbc.Driver");
+            dataSource.setJdbcUrl("jdbc:mysql://localhost:3306/spring?serverTimezone=UTC");
+            dataSource.setUser("root");
+            dataSource.setPassword("qwer");
+        } catch (PropertyVetoException e) {
+            e.printStackTrace();
+        }
+        return dataSource;
+    }
+}
+
+```
+
+
+
+​		此时进行运行的话肯定是要报错的，那么有三种方式可以解决这个问题
+
+1. 更改JDBCConfig类为配置类，加@Configuration注解，然后在SpringConfiguration类中的@ComponentScan中加入JDBCConfig类的路径
+2. 直接在AnnotationConfigApplicationContext类中传入JDBCConfig类 的字节码类
+3. 在SpringConfiguration中使用@Import(JDBCConfig.class)，就可以进行解析了
+
+
+
+​	在JDBCConfig类中如果出现了以下情况
+
+```java
+public class JDBCConfig {
+    @Bean("runner")
+    public QueryRunner getQueryRunner(DataSource dataSource) {
+        return new QueryRunner(dataSource);
+    }
+
+    @Bean("dataSource1")
+    public DataSource getDataSource1(){
+        
+        ComboPooledDataSource dataSource = null;
+        try {
+            dataSource = new ComboPooledDataSource();
+            dataSource.setDriverClass("com.mysql.cj.jdbc.Driver");
+            dataSource.setJdbcUrl("jdbc:mysql://localhost:3306/spring?serverTimezone=UTC");
+            dataSource.setUser("root");
+            dataSource.setPassword("qwer");
+        } catch (PropertyVetoException e) {
+            e.printStackTrace();
+        }
+        return dataSource;
+    }
+    
+     @Bean("dataSource2")
+    public DataSource getDataSource2(){
+        
+        ComboPooledDataSource dataSource = null;
+        try {
+            dataSource = new ComboPooledDataSource();
+            dataSource.setDriverClass("com.mysql.cj.jdbc.Driver");
+            dataSource.setJdbcUrl("jdbc:mysql://localhost:3306/spring?serverTimezone=UTC");
+            dataSource.setUser("root");
+            dataSource.setPassword("qwer");
+        } catch (PropertyVetoException e) {
+            e.printStackTrace();
+        }
+        return dataSource;
+    }
+}
+
+```
+
+此时有两个方法的参数为DataSource类型都使用@Bean注解加入到了容器中，而getQueryRunner方法的参数就是DataSource类型，这是spring框架又会找不着北，不知道给参数注入那个DataSource，那么此时和@Autowired注解是一样的，可以把参数名改为和@Bean的id一样，亦可以在参数前加@Qualifier注解指定想要的那个Bean对象
+
+```java
+@Bean("runner")
+    public QueryRunner getQueryRunner(@Qualifier("dataSource2") DataSource dataSource) {
+        return new QueryRunner(dataSource);
+    }
+```
+
+
+
+## 整合junit和spring
+
+
+
+​			当我们在junit中测试程序时，还是用AnnotationConfigApplicationContext类获取容器，然后在获取bean对象作为整个测试类的属性，调用方法，但是并没有使用spring的注解注入依赖，当我们这样做的话，肯定是不对的，此时会抛出一个空指针异常，这是因为junit测试的时候不会帮我们自动创建容器，想要使用注解的方式进行测试，就需要将junit和spring进行整合
+
+1. 导入spring整合junit的坐标
+
+```xml
+<dependency>
+     <groupId>org.springframework</groupId>
+     <artifactId>spring-test</artifactId>
+     version>5.0.1.RELEASE</version>
+     <scope>test</scope>
+</dependency>
+```
+
+2. 将junit原来的main方法替换成spring提供的main方法，使用@Runwith注解
+
+```
+@RunWith(SpringJUnit4ClassRunner.class)
+@ContextConfiguration(classes = SpringConfiguration.class)
+public class TestSpring {
+
+//    ApplicationContext ac = new AnnotationConfigApplicationContext(SpringConfiguration.class);
+//    AccountService service = (AccountService) ac.getBean("accountService");
+//    @Qualifier("accountService")
+    @Autowired
+    AccountService service = null;
+
+    @Test
+    public void testFindAA(){
+        List<Account> accounts = service.findAccounts();
+        for (Account account : accounts) {
+            System.out.println(account);
+        }
+    }
+}
+```
+
+3. 告知spring的运行器，容器的创建时基于xml还是基于注解方式，并说明位置，使用@ContexeConfiguration注解指定容器的创建方式
+   1. classes表示是注解方式，指定注解类所在的位置
+   2. locations：指定xml文件的位置，加上classpath关键字，表示在类路径下
+
+
+
