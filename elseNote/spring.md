@@ -13,10 +13,10 @@
     * [2. set方法注入](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#2-set方法注入)
   * [spring注解开发](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#spring注解开发)
     * [基于xml方式IOC的CRUD](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#基于xml方式IOC的CRUD)
-      * [1.1 @Autowired注解的细节](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#1.1-@Autowired注解的细节)
   * [注解方式实现案例](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#注解方式实现案例)
     * [1. 注解的作用和细节](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#1-注解的作用和细节)
     * [2. 在CRUD中使用注解](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#2-在CRUD中使用注解)
+      * [2.1 @Autowired注解的细节](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#2.1-@Autowired注解的细节)
     * [3. spring新注解](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#3-spring新注解)
   * [整合junit和spring](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#整合junit和spring)
 
@@ -960,39 +960,6 @@ Account{id=3, name='cici', money=900.0}
 
 
 
-#### 1.1 @Autowired注解的细节
-
-```java
-@Repository("accountDao")
-public class AccountDaoImpl implements AccountDao{
-}
-
-@Repository("accountDao2")
-public class AccountDaoImpl2 implements AccountDao {
-}
-
-@Service("accountService")
-public class AccountServiceImpl implements AccountService {
-
-    @Autowired
-    private AccountDao dao;
-}
-```
-
-​			可以看到AccountDaoImpl类AccountDaoImpl2都实现了AccountDao类，并且都加入到了spring容器中，此时spring容器中就有两个AccountDao类型的bean对象，@Autowired就不知道要注入那个bean对象才好，当我们将AccountServiceImpl的dao属性名改为accountDao或者是accountDao2时，spring才能找到，因为此时属性名和id是相同的，当然也可以保持原有的属性名，用@Qualifier或者时@Resource注解指定id即可
-
-```java
-@Autowired
-@Qualifier("accountDao")
-private AccountDao dao;
-
-//或者是
-@Resource(name = "accountDao")
-private AccountDao dao;
-```
-
-
-
 
 
 ## 注解方式实现案例
@@ -1107,6 +1074,41 @@ Account{id=1, name='alan', money=100.0}
 Account{id=2, name='bob', money=200.0}
 Account{id=3, name='cici', money=900.0}
 ```
+
+
+
+#### 2.1 @Autowired注解的细节
+
+```java
+@Repository("accountDao")
+public class AccountDaoImpl implements AccountDao{
+}
+
+@Repository("accountDao2")
+public class AccountDaoImpl2 implements AccountDao {
+}
+
+@Service("accountService")
+public class AccountServiceImpl implements AccountService {
+
+    @Autowired
+    private AccountDao dao;
+}
+```
+
+​			可以看到AccountDaoImpl类AccountDaoImpl2都实现了AccountDao类，并且都加入到了spring容器中，此时spring容器中就有两个AccountDao类型的bean对象，@Autowired就不知道要注入那个bean对象才好，当我们将AccountServiceImpl的dao属性名改为accountDao或者是accountDao2时，spring才能找到，因为此时属性名和id是相同的，当然也可以保持原有的属性名，用@Qualifier或者时@Resource注解指定id即可
+
+```java
+@Autowired
+@Qualifier("accountDao")
+private AccountDao dao;
+
+//或者是
+@Resource(name = "accountDao")
+private AccountDao dao;
+```
+
+
 
 
 
