@@ -499,7 +499,7 @@ public class AccountServiceImpl implements AccountService {
     <constructor-arg type="java.lang.Integer" value="18"></constructor-arg>
     <constructor-arg type="com.dajiao.dao.impl.AccountDaoImpl" ref="now"></constructor-arg>-->
 </bean>
-<bean id="now" class="com.dajiao.dao.impl.AccountDaoImpl"></bean>
+<bean id="accountDao" class="com.dajiao.dao.impl.AccountDaoImpl"></bean>
 ```
 
 
