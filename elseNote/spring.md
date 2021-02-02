@@ -1318,3 +1318,752 @@ public class TestSpring {
 
 
 
+## spring的AOP
+
+​			
+
+				### 实现转账案例
+
+​			根据用户的名字进行转出账户，实现步骤：获取转出账户的用户，获取转入账户的用户，更新装出账户的余额，更新转入账户的余额，代码实现
+
+```java
+public interface AccountDao {
+    Account findAccountByName(String AccountName);
+}
+
+@Repository("accountDao")
+public class AccountDaoImpl implements AccountDao{
+    
+    @Autowired
+    private QueryRunner queryRunner;
+    
+    //根据名字获取账户
+    public Account findAccountByName(String AccountName) {
+        try {
+            List<Account> accounts = queryRunner.query("select * from account where name = ?", new BeanListHandler<Account>(Account.class), AccountName);
+            //如果没有，就返回空
+            if (accounts == null || accounts.size() == 0) {
+                return null;
+            }
+            //如果有多个，抛出异常
+            if (accounts.size()>1) {
+                throw new RuntimeException("数据有误");
+            }
+            return accounts.get(0);
+        }catch (Exception e){
+            throw new RuntimeException(e);
+        }
+    }
+}
+
+public interface AccountService {
+    
+   /**
+     * 用于账户转出金额
+     * @param sourceName 转出账户的name
+     * @param targetName 转入账户的name
+     * @param money 转账的金额
+     * @return 无
+     * */
+    void transferAccount(String sourceName, String targetName, double money);
+}
+
+@Service("accountService")
+public class AccountServiceImpl implements AccountService {
+    
+    @Resource(name = "accountDao")
+    private AccountDao dao;
+    
+        public void transferAccount(String sourceName, String targetName, double money) {
+
+            //获取转出钱 的账户
+            Account sourceAccount = dao.findAccountByName(sourceName);
+            //获取转入钱 的账户
+            Account targetAccount = dao.findAccountByName(targetName);
+            //转出账户的余额更新
+            sourceAccount.setMoney(sourceAccount.getMoney() - money);
+            //转入账户的余额更新
+            targetAccount.setMoney(targetAccount.getMoney() + money);
+            //更新账户
+            dao.updateAccount(sourceAccount);
+            dao.updateAccount(targetAccount);
+    }
+}
+
+```
+
+
+
+注入依赖：
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+        http://www.springframework.org/schema/beans/spring-beans.xsd
+        http://www.springframework.org/schema/context
+        http://www.springframework.org/schema/context/spring-context.xsd">
+
+    <!--告知spring在创建容器时要扫描的包，配置所需要的标签不是在beans的约束中，而是一个名称为
+    context名称空间和约束中-->
+    <context:component-scan base-package="com.dajiao"></context:component-scan>
+
+    <bean id="runner" class="org.apache.commons.dbutils.QueryRunner" >
+    	<property name="ds" ref="dataSource"></property>
+    </bean>
+
+    <bean id="dataSource" class="com.mchange.v2.c3p0.ComboPooledDataSource">
+        <property name="driverClass" value="com.mysql.cj.jdbc.Driver"></property>
+        <property name="jdbcUrl" value="jdbc:mysql://localhost:3306/spring?serverTimezone=UTC"></property>
+        <property name="user" value="root"></property>
+        <property name="password" value="qwer"></property>
+    </bean>
+</beans>
+```
+
+
+
+执行测试方法：
+
+```java
+@RunWith(SpringJUnit4ClassRunner.class)
+@ContextConfiguration(locations = "classpath:bean.xml")
+public class TestProxy {
+
+    @Autowired
+    AccountService service = null;
+    
+    @Test
+    public void testTransfer(){
+        service.transferAccount("bob","alan",50);
+    }
+
+}
+```
+
+
+
+上方就是一个转入账户的基本实现，但是这种执行了多次事务的代码是非常不靠谱的，当重剑有那么一句代码发生了错误，那么就会导致上方的数据库交互成功，下方的失败，这是一件很糟糕的事情，往往导致我们的执行结果牛头不对马嘴，所以这种代码必须只能有一个事务来管理，要么全部成功，要么全部失败
+
+​		
+
+### 事务管理
+
+​		想要只有一个事务，必须保证是一个连接，那么这就得用到ThreadLocal类
+
+```java
+/**
+ * 获取connection
+ * @author: Mr.Yu
+ * @create: 2021-02-02 12:45
+ **/
+public class DataSourceUtils {
+
+    //连接池获取连接
+    private DataSource dataSource;
+	//ThreadLocal保存连接
+    private ThreadLocal<Connection> threadLocal;
+
+    //提供set方法方便注入依赖
+    public void setDataSource(DataSource dataSource) {
+        this.dataSource = dataSource;
+    }
+
+    public void setThreadLocal(ThreadLocal<Connection> threadLocal) {
+        this.threadLocal = threadLocal;
+    }
+
+    public Connection getConnection(){
+
+        Connection connection = null;
+        try {
+            //从ThreadLocal中获取连接
+            connection = threadLocal.get();
+            if (connection == null) {
+                //如果没有，利用dataSource数据连接池获取
+                connection = dataSource.getConnection();
+                //存入ThreadLocal中
+                threadLocal.set(connection);
+            }
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        }
+        return connection;
+    }
+
+    //接触线程绑定的connection
+    public void remove() {
+        threadLocal.remove();
+    }
+}
+```
+
+
+
+​		创建事务管理工具的类
+
+```java
+public class TransManager {
+
+    DataSourceUtils dataSourceUtils;
+
+    public void setDataSourceUtils(DataSourceUtils dataSourceUtils) {
+        this.dataSourceUtils = dataSourceUtils;
+    }
+
+    /**
+     * 关闭自动提交事务
+     * */
+    public void closeAutoCommit() {
+        try {
+            dataSourceUtils.getConnection().setAutoCommit(false);
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        }
+    }
+
+    /**
+     * 提交事务
+     * */
+    public void commit(){
+        try {
+            dataSourceUtils.getConnection().commit();
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        }
+    }
+
+    /**
+     * 回滚事务
+     * */
+    public void rollback(){
+        try {
+            dataSourceUtils.getConnection().rollback();
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        }
+    }
+
+    /**
+     * 关闭资源
+     * */
+    public void close() {
+        try {
+            dataSourceUtils.getConnection().close();
+            dataSourceUtils.remove();
+        } catch (SQLException throwables) {
+            throwables.printStackTrace();
+        }
+    }
+
+}
+```
+
+​			
+
+​		修改dao层的方法，在sql语句前利用DataSourceUtils获取连接和修改业务层代码，进行事务管理
+
+```java
+public void transferAccount(String sourceName, String targetName, double money) {
+
+        try {
+            //关闭自动提交
+            manager.closeAutoCommit();
+            //获取转出钱 的账户
+            Account sourceAccount = dao.findAccountByName(sourceName);
+            //获取转入钱 的账户
+            Account targetAccount = dao.findAccountByName(targetName);
+            //转出账户的余额更新
+            sourceAccount.setMoney(sourceAccount.getMoney() - money);
+            //转入账户的余额更新
+            targetAccount.setMoney(targetAccount.getMoney() + money);
+//            int i = 1/0;
+            //更新账户
+            dao.updateAccount(sourceAccount);
+            dao.updateAccount(targetAccount);
+            //提交事务
+            manager.commit();
+        }catch (Exception e){
+            //回滚事务
+            manager.rollback();
+            throw new RuntimeException(e);
+        }finally {
+            //关闭资源
+            manager.close();
+        }
+    }
+```
+
+​			
+
+配置bean文件注入依赖
+
+```xml
+<beans>
+<context:component-scan base-package="com.dajiao"></context:component-scan>
+
+    <!--queryrunner中不再有数据源，我们根据工具类获取连接-->
+    <bean id="runner" class="org.apache.commons.dbutils.QueryRunner" ></bean>
+
+    <bean id="dataSource" class="com.mchange.v2.c3p0.ComboPooledDataSource">
+        <property name="driverClass" value="com.mysql.cj.jdbc.Driver"></property>
+        <property name="jdbcUrl" value="jdbc:mysql://localhost:3306/spring?serverTimezone=UTC"></property>
+        <property name="user" value="root"></property>
+        <property name="password" value="qwer"></property>
+    </bean>
+
+    <!--配置DataSourceUtils工具类，注入依赖-->
+    <bean id="utils" class="com.dajiao.utils.DataSourceUtils">
+        <property name="dataSource" ref="dataSource"></property>
+        <property name="threadLocal" ref="tl"></property>
+    </bean>
+
+    <!--将ThreadLocal加入容器，方便注入依赖-->
+    <bean id="tl" class="java.lang.ThreadLocal"></bean>
+
+    <!--配置TransManager事务管理类，并注入依赖-->
+    <bean id="manager" class="com.dajiao.utils.TransManager">
+        <property name="dataSourceUtils" ref="utils"></property>
+    </bean>
+</beans>
+```
+
+
+
+
+
+​			这样就能保证上面的代码由同一个connection进行连接，同一个事务管理，这样才能一荣俱荣，一瞬俱损，就算中间 的代码处理毛病，也会进行事务的回滚，而不会造成异常上面的代码执行，下面的代码不执行，但是我们也发现了，这样的代码是在是太过于臃肿，而且这只是一个功能，在开发中有着大量功能难道都要这样去写嘛，这样的代价是在太高，但是又不得不对这些功能进行处理，所以要是有一个一劳永逸的方法就好了，那么其实java还是由这种功能的-----动态代理
+
+
+
+### 动态代理解决事务管理
+
+​			动态代理的特点就是在不修改源码的基础上进行方法的增强，并且可以随时根据字节码的创建而创建代理对象，当代理对象调用了其功能方法之后，就会经过InvocationHandler类的invoke方法，也就是增强方法，我们可以利用代理模式来做一个事务管理器，同一对AccountServiceImpl中的方法进行事务拦截
+
+```java
+/**
+ * @author: Mr.Yu
+ * @create: 2021-02-02 13:12
+ **/
+public class BeanFactory{
+    
+    
+    @Resource(name = "accountService")
+    AccountService service;
+    
+    TransManager manager;
+
+    public void setManager(TransManager manager) {
+        this.manager = manager;
+    }
+
+    public AccountService doProxy() {
+        //获取动态代理对象，通过获取被代理对象的类加载器，接口，当代理对象调用相应方法时，也就调用了被代理对象的相应方法，在调用的前后可以对方法进行增强代码的添加
+        return (AccountService) Proxy.newProxyInstance(service.getClass().getClassLoader(), service.getClass().getInterfaces(), new InvocationHandler() {
+            //增强方法
+            public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+                Object reValue = null;
+                try{
+                    //事务自动提交关闭
+                    manager.closeAutoCommit();
+                    //执行被代理类的方法
+                    reValue = method.invoke(service, args);
+                    //提交事务
+                    manager.commit();
+                }catch (Exception e){
+                    System.out.println("有错误");
+                    //回滚事务
+                    manager.rollback();
+                    e.printStackTrace();
+                }finally {
+                    //关闭资源
+                    manager.close();
+                }
+                return reValue;
+            }
+        });
+    }
+}
+```
+
+
+
+配置bean文件，在bean文件的后面追加BeanFactory的配置，此时是根据工厂获取代理对象
+
+```java
+<bean id="factory" class="com.dajiao.factory.BeanFactory" >
+    <property name="manager" ref="manager"></property>
+</bean>
+<bean id="factoryService" factory-bean="factory" factory-method="doProxy"></bean>
+```
+
+
+
+那么此时在IOC的容器中就有了两个AccountService的bean对象，一个的id是accountService，一个id是factoryService，我们在测试类中要获取的对象是代理对象，通过代理对象调用方法进行事物的拦截，测试类如下
+
+```java
+@RunWith(SpringJUnit4ClassRunner.class)
+@ContextConfiguration(locations = "classpath:bean.xml")
+public class TestProxy {
+
+    //指定service对象是代理对象
+    @Resource(name = "factoryService")
+    AccountService service = null;
+
+    @Test
+    public void testFindAA(){
+        List<Account> accounts = service.findAccounts();
+        for (Account account : accounts) {
+            System.out.println(account);
+        }
+    }
+
+    @Test
+    public void testTransfer(){
+        service.transferAccount("bob","alan",50);
+    }
+
+}
+```
+
+通过代理模式的事务管理，我们大大增加了代码的可读性，简洁性，减少了许多的工作量
+
+
+
+## spring的AOP
+
+​			
+
+​			AOP，被称为面向切面编程，它的主要作用是将程序中重复的代码抽取出来，在需要执行的时候，利用动态代理的技术，再不改变源码的情况下，对我们的已有方法进行增强，也就是说我们可以通过配置的方式，将上面的事务管理进行成功
+
+​		
+
+### spring的官方术语
+
+
+
+* Joinpoint(连接点)：通俗的将，连接点被称为方法，因为spring只支持方法类型为连接点
+* PointCut(切入点)：所谓切入点就是我们进行拦截的方法
+* Advice(通知)：所谓通知是拦截到PointCut要做的事情，一般分为前置通知，后置通知，最终通知，异常通知，环绕通知
+* Introduction(引介)：引介是一种在不修改代码的前提下，Introduction可以在运行期为类动态地添加一些方法或Field
+* Target(目标对象)：代理的目标对象（被代理对象）
+* Weaving(织入)：指把增强应用到目标对象来创建新的代理对象的过程。
+* Proxy(代理)：一个类被 AOP 织入增强后，就产生一个结果代理类。
+* Aspect(切面)：是切入点和通知的结合
+
+
+
+### 利用AOP添加代码
+
+
+
+​			首先，我们创建一个service类，用于模拟账户的保存，修改，插入
+
+```java
+/**
+ * @author: Mr.Yu
+ * @create: 2021-02-02 21:17
+ **/
+public interface AccountService {
+
+    void saveAccount();
+
+    void insertAccount();
+
+    void updateAccount(int i);
+}
+
+/**
+ * @author: Mr.Yu
+ * @create: 2021-02-02 21:19
+ **/
+public class AccountServiceImpl implements AccountService {
+    
+    public void saveAccount() {
+        System.out.println("保存用户账户信息");
+    }
+
+    public void insertAccount() {
+        System.out.println("插入用户信息");
+    }
+
+    public void updateAccount(int i) {
+        System.out.println("修改用户信息");
+    }
+}
+```
+
+
+
+模拟一个日志类，将日志类方法插入到service类中的所有方法下
+
+```java
+/**
+ * @author: Mr.Yu
+ * @create: 2021-02-02 21:21
+ **/
+public class Logger {
+
+    public void printLog(){
+        System.out.println("打印日志printLog·····前置代码");
+    }
+
+    public void afterReturn(){
+        System.out.println("打印日志afterReturn·····后置代码");
+    }
+
+    public void afterThrow(){
+        System.out.println("打印日志afterThrow·····异常代码");
+    }
+
+    public void after(){
+        System.out.println("打印日志after·····最终代码");
+    }
+}
+```
+
+
+
+要想在service类的方法前插入Logger的printLog方法，需要配置xml文件，命名为：bean.xml
+
+此时需要导入依赖，用于解析切点表达式
+
+```xml
+<dependency>
+     <groupId>org.aspectj</groupId>
+     <artifactId>aspectjweaver</artifactId>
+     <version>1.9.5</version>
+</dependency>
+```
+
+
+
+
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+        http://www.springframework.org/schema/beans/spring-beans.xsd
+        http://www.springframework.org/schema/context
+        http://www.springframework.org/schema/context/spring-context.xsd
+        http://www.springframework.org/schema/aop
+        http://www.springframework.org/schema/aop/spring-aop.xsd">
+
+	<!--此时的约束有aop约束，context约束-->
+	<!--配置AccountServiceImpl类的配置-->
+    <bean id="service" class="com.dajiao.service.impl.AccountServiceImpl"></bean>
+	
+    <!--配置Logger类-->
+    <bean id="logger" class="com.dajiao.utils.Logger"> </bean>
+    
+    <!--1、用aop:config标签表明开始AOP的配置
+        2、使用aop:aspect标签表明配置切面
+                id属性：是给切面提供一个唯一标识
+                ref属性：是指定通知类bean的Id。
+		3、aop:before：表示配置前置通知
+			method：表示那个方法是前置通知
+			pointcut：切入点表达式，用于指定对那些方法增强
+				关键字：execution()
+				写法：访问修饰符 返回类型 包名.包名.包名...类名.方法名(参数...)
+				例如：public void com.dajiao.service.impl.AccountServiceImpl.saveAccount()
+				访问修饰符可以省略，返回类型可以用通配符表示所有类型，包名可以用 *..表示包及其子包
+				类可以用通配符表示包下的所有类，方法可以用通配符表示所有方法，方法参数可以用..表示所有类型参数
+			所以上面的写法可以改成：*(void) *..(com.dajiao.service.impl)*(AccountServiceImpl).*(saveAccount)(..)
+			但是一般都是这样的：* com.dajiao.service.impl.*.*(..)，将业务层下面的方法都变成切入点
+	-->
+    
+        <!--配置AOP-->
+    <aop:config>
+    	<!--配置切面-->
+        <aop:aspect id="logAdvice" ref="logger">
+            <!--配置通知类型，并和所要切入的方法建立联系-->
+        	<aop:before method="printLog" pointcut="execution(* com.dajiao.service.impl.*.*())"></aop:before>
+        </aop:aspect>
+    </aop:config>
+</beans>
+```
+
+
+
+测试方法：
+
+```java
+/**
+ * @author: Mr.Yu
+ * @create: 2021-02-02 21:33
+ **/
+public class TestAop {
+
+
+    public static void main(String[] args) {
+        ApplicationContext context = new ClassPathXmlApplicationContext("aopBean.xml");
+        AccountService service = (AccountService) context.getBean("service");
+        service.saveAccount();
+        service.insertAccount();
+        service.updateAccount(1);
+    }
+}
+```
+
+
+
+配置后置代码，异常代码，最终代码
+
+```xml
+<aop:config>-->
+    <aop:aspect id="logAspect" ref="log">-->
+        <!--配置前置代码，相当于关闭自动提交事务-->
+         <aop:before method="printLog" pointcut="execution(* com.dajiao.service.impl.*.*())"></aop:before>
+        <!--配置后置代码，相当于提交事务-->
+       <aop:after-returning method="afterReturn" pointcut="execution(* com.dajiao.service.impl.*.*())"</aop:after-returning>
+        <!--配置异常代码，相当于回滚事务-->
+        <aop:after-throwing method="afterThrow" pointcut="execution(* com.dajiao.service.impl.*.*())"</aop:after-throwing>
+        <!--配置最终代码，相当于关闭资源-->
+         <aop:after method="after" pointcut="execution(* com.dajiao.service.impl.*.*())"></aop:after>
+        <!--配置环绕代码，可以手动的添加自己想要添加的代码-->
+         <aop:around method="aroundPrintLog" pointcut="execution(* com.dajiao.service.impl.*.*())"</aop:around>
+     </aop:aspect>
+</aop:config>
+```
+
+
+
+```java
+public class Logger {
+     
+     /**
+     * 环绕通知
+     * 问题：
+     *      当我们配置了环绕通知之后，切入点方法没有执行，而通知方法执行了。
+     * 分析：
+     *      通过对比动态代理中的环绕通知代码，发现动态代理的环绕通知有明确的切入点方法调用，而我们的代码中没有。
+     * 解决：
+     *      Spring框架为我们提供了一个接口：ProceedingJoinPoint。该接口有一个方法proceed()，此方法就相当于明确调用切入点方法。
+     *      该接口可以作为环绕通知的方法参数，在程序执行时，spring框架会为我们提供该接口的实现类供我们使用。
+     *
+     * spring中的环绕通知：
+     *      它是spring框架为我们提供的一种可以在代码中手动控制增强方法何时执行的方式。
+     */
+    public Object aroundPrintLog(ProceedingJoinPoint pjp){
+
+        Object[] args = pjp.getArgs();
+        Object reValue = null;
+        try {
+            System.out.println("around的前置代码");
+            reValue = pjp.proceed(args);
+            System.out.println("around后置代码");
+            return reValue;
+        } catch (Throwable throwable) {
+            System.out.println("around异常代码");
+            throw new RuntimeException(throwable);
+        }finally {
+            System.out.println("around追中代码");
+        }
+    }
+}
+```
+
+
+
+这样就可以一次性的将前置，后置，异常，最终代码，经过手动编写去实现，这样又是另一种方式来实现动态代理了
+
+
+
+### 注解实现AOP
+
+
+
+1. 在xml文件开启注解AOP的支持和开启扫描的包
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+        http://www.springframework.org/schema/beans/spring-beans.xsd
+        http://www.springframework.org/schema/aop
+        http://www.springframework.org/schema/aop/spring-aop.xsd
+        http://www.springframework.org/schema/context
+        http://www.springframework.org/schema/context/spring-context.xsd">
+
+    <!-- 配置spring创建容器时要扫描的包-->
+    <context:component-scan base-package="com.itheima"></context:component-scan>
+
+    <!-- 配置spring开启注解AOP的支持 -->
+    <aop:aspectj-autoproxy></aop:aspectj-autoproxy>
+</beans>
+```
+
+2. 在类上添加注解，加入到IOC容器中
+
+```java
+@Service("service")
+public class AccountServiceImpl implements AccountService {
+...
+}
+
+@Component("logger")
+@Aspect//将Logger配置成切面类
+public class Logger {
+
+    //配置切入表达式
+    @Pointcut("execution(* com.dajiao.service.impl.*.*())")
+    public void pf(){}
+
+    //配置前置代码，并加入切入表达式
+//    @Before("pf()")
+    public void printLog(){
+        System.out.println("打印日志printLog·····前置代码");
+    }
+
+    //配置后置代码，并加入切入表达式
+//    @AfterReturning("pf()")
+    public void afterReturn(){
+        System.out.println("打印日志afterReturn·····后置代码");
+    }
+
+    //配置异常代码，并加入切入表达式
+//    @AfterThrowing("pf()")
+    public void afterThrow(){
+        System.out.println("打印日志afterThrow·····异常代码");
+    }
+
+    //配置最终代码，并加入切入表达式
+//    @After("pf()")
+    public void after(){
+        System.out.println("打印日志after·····最终代码");
+    }
+
+    //配置环绕代码，并加入切入表达式
+    @Around("pf()")
+    public Object aroundPrintLog(ProceedingJoinPoint pjp){
+
+        Object[] args = pjp.getArgs();
+        Object reValue = null;
+        try {
+            System.out.println("around的前置代码");
+            reValue = pjp.proceed(args);
+            System.out.println("around后置代码");
+            return reValue;
+        } catch (Throwable throwable) {
+            System.out.println("around异常代码");
+            throw new RuntimeException(throwable);
+        }finally {
+            System.out.println("around追中代码");
+        }
+    }
+}
+```
+
+3. 读取bean.xml文件生成service对象，调用方法即可
+
+
+
