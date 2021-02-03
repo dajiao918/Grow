@@ -19,6 +19,14 @@
       * [2.1 @Autowired注解的细节](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#2.1-@Autowired注解的细节)
     * [3. spring新注解](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#3-spring新注解)
   * [整合junit和spring](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#整合junit和spring)
+  * [spring的AOP](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#spring的AOP)
+    * [实现转账案例](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#实现转账案例)
+    * [事务管理](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#事务管理)
+    * [动态代理进行事务管理](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#动态代理进行事务管理)
+  * [spring的AOP解决重复代码](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#spring的AOP解决重复代码)
+    * [spring的官方术语](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#spring的官方术语)
+    * [利用AOP增强方法](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#利用AOP增强方法)
+    * [注解实现AOP](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#注解实现AOP)
 
 ## 概述
 
@@ -1322,7 +1330,7 @@ public class TestSpring {
 
 ​			
 
-				### 实现转账案例
+### 实现转账案例
 
 ​			根据用户的名字进行转出账户，实现步骤：获取转出账户的用户，获取转入账户的用户，更新装出账户的余额，更新转入账户的余额，代码实现
 
@@ -1445,7 +1453,7 @@ public class TestProxy {
 
 
 
-上方就是一个转入账户的基本实现，但是这种执行了多次事务的代码是非常不靠谱的，当重剑有那么一句代码发生了错误，那么就会导致上方的数据库交互成功，下方的失败，这是一件很糟糕的事情，往往导致我们的执行结果牛头不对马嘴，所以这种代码必须只能有一个事务来管理，要么全部成功，要么全部失败
+上方就是一个转入账户的基本实现，但是这种执行了多次事务的代码是非常不靠谱的，当中间有那么一句代码发生了错误，那么就会导致上方的数据库交互成功，但是下方的失败，这是一件很糟糕的事情，往往导致我们的执行结果牛头不对马嘴，所以这种代码必须只能有一个事务来管理，要么全部成功，要么全部失败
 
 ​		
 
@@ -1493,7 +1501,7 @@ public class DataSourceUtils {
         return connection;
     }
 
-    //接触线程绑定的connection
+    //解除线程绑定的connection
     public void remove() {
         threadLocal.remove();
     }
@@ -1634,11 +1642,11 @@ public void transferAccount(String sourceName, String targetName, double money) 
 
 
 
-​			这样就能保证上面的代码由同一个connection进行连接，同一个事务管理，这样才能一荣俱荣，一瞬俱损，就算中间 的代码处理毛病，也会进行事务的回滚，而不会造成异常上面的代码执行，下面的代码不执行，但是我们也发现了，这样的代码是在是太过于臃肿，而且这只是一个功能，在开发中有着大量功能难道都要这样去写嘛，这样的代价是在太高，但是又不得不对这些功能进行处理，所以要是有一个一劳永逸的方法就好了，那么其实java还是由这种功能的-----动态代理
+​			这样就能保证上面的代码由同一个connection进行连接，同一个事务管理，这样才能一荣俱荣，一瞬俱损，就算中间 的代码处理毛病，也会进行事务的回滚，而不会造成异常上面的代码执行，下面的代码不执行，但是我们也发现了，这样的代码实在是太过于臃肿，而且这只是一个功能，在开发中有着大量功能，每个功能都需要事务管理，如果一个功能编写一次事务代码，这样的代价是在太高，但是又不得不对这些功能进行处理，所以我们需要抽取这部分重复的代码，在执行这些方法的时候动态插入代码-----**动态代理**
 
 
 
-### 动态代理解决事务管理
+### 动态代理进行事务管理
 
 ​			动态代理的特点就是在不修改源码的基础上进行方法的增强，并且可以随时根据字节码的创建而创建代理对象，当代理对象调用了其功能方法之后，就会经过InvocationHandler类的invoke方法，也就是增强方法，我们可以利用代理模式来做一个事务管理器，同一对AccountServiceImpl中的方法进行事务拦截
 
@@ -1690,7 +1698,7 @@ public class BeanFactory{
 
 
 
-配置bean文件，在bean文件的后面追加BeanFactory的配置，此时是根据工厂获取代理对象
+配置bean文件，在bean文件的后面追加BeanFactory的配置，此时是根据工厂获取对象
 
 ```java
 <bean id="factory" class="com.dajiao.factory.BeanFactory" >
@@ -1732,11 +1740,11 @@ public class TestProxy {
 
 
 
-## spring的AOP
+## spring的AOP解决重复代码
 
 ​			
 
-​			AOP，被称为面向切面编程，它的主要作用是将程序中重复的代码抽取出来，在需要执行的时候，利用动态代理的技术，再不改变源码的情况下，对我们的已有方法进行增强，也就是说我们可以通过配置的方式，将上面的事务管理进行成功
+​			AOP，被称为面向切面编程，它的主要作用是将程序中重复的代码抽取出来，在需要执行的时候，利用动态代理的技术，再不改变源码的情况下，对我们的已有方法进行增强，也就是说我们可以通过配置的方式，执行上面的事务管理
 
 ​		
 
@@ -1755,7 +1763,7 @@ public class TestProxy {
 
 
 
-### 利用AOP添加代码
+### 利用AOP增强方法
 
 
 
@@ -1882,8 +1890,8 @@ public class Logger {
     <aop:config>
     	<!--配置切面-->
         <aop:aspect id="logAdvice" ref="logger">
-            <!--配置通知类型，并和所要切入的方法建立联系-->
-        	<aop:before method="printLog" pointcut="execution(* com.dajiao.service.impl.*.*())"></aop:before>
+            <!--配置通知类型，并和所要切入的方法建立联系，此时impl包下的所有方法都变成切入点-->
+        	<aop:before method="printLog" pointcut="execution(* com.dajiao.service.impl.*.*(..))"></aop:before>
         </aop:aspect>
     </aop:config>
 </beans>
@@ -1918,15 +1926,15 @@ public class TestAop {
 ```xml
 <aop:config>-->
     <aop:aspect id="logAspect" ref="log">-->
-        <!--配置前置代码，相当于关闭自动提交事务-->
+        <!--配置前置通知代码，相当于关闭自动提交事务-->
          <aop:before method="printLog" pointcut="execution(* com.dajiao.service.impl.*.*())"></aop:before>
-        <!--配置后置代码，相当于提交事务-->
+        <!--配置后置通知代码，相当于提交事务-->
        <aop:after-returning method="afterReturn" pointcut="execution(* com.dajiao.service.impl.*.*())"</aop:after-returning>
-        <!--配置异常代码，相当于回滚事务-->
+        <!--配置异常通知代码，相当于回滚事务-->
         <aop:after-throwing method="afterThrow" pointcut="execution(* com.dajiao.service.impl.*.*())"</aop:after-throwing>
-        <!--配置最终代码，相当于关闭资源-->
+        <!--配置最终通知代码，相当于关闭资源-->
          <aop:after method="after" pointcut="execution(* com.dajiao.service.impl.*.*())"></aop:after>
-        <!--配置环绕代码，可以手动的添加自己想要添加的代码-->
+        <!--配置环绕通知代码，可以手动的添加自己想要添加的代码-->
          <aop:around method="aroundPrintLog" pointcut="execution(* com.dajiao.service.impl.*.*())"</aop:around>
      </aop:aspect>
 </aop:config>
@@ -2064,6 +2072,23 @@ public class Logger {
 ```
 
 3. 读取bean.xml文件生成service对象，调用方法即可
+
+```java
+/**
+ * @author: Mr.Yu
+ * @create: 2021-02-02 21:33
+ **/
+public class TestAop {
+
+    public static void main(String[] args) {
+        ApplicationContext context = new ClassPathXmlApplicationContext("aopBean.xml");
+        AccountService service = (AccountService) context.getBean("service");
+        service.saveAccount();
+        service.insertAccount();
+        service.updateAccount(1);
+    }
+}
+```
 
 
 
