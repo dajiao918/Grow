@@ -27,6 +27,10 @@
     * [spring的官方术语](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#spring的官方术语)
     * [利用AOP增强方法](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#利用AOP增强方法)
     * [注解实现AOP](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#注解实现AOP)
+  * [spring的事务控制](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#spring的事务控制)
+    * [spring事务控制--xml和注解结合](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#spring事务控制--xml和注解结合)
+    * [spring纯注解事务控制](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#spring纯注解事务控制)
+  * [总结](https://github.com/dajiao918/Grow/blob/main/elseNote/spring.md#总结)
 
 ## 概述
 
@@ -2091,4 +2095,401 @@ public class TestAop {
 ```
 
 
+
+
+
+## spring的事务控制
+
+
+
+spring的事务控制是可以指定想要进行事务的方法，进行事务控制，通过TransactionManager事务管理类对事务进行管理，我们可以使用xml配置或者是注解的方式来进行事务的管理，不在需要我们手动的编写提交和回滚方法，提升开发的效率
+
+
+
+首先，spring的事务控制需要导入依赖
+
+```xml
+<!--事务控制-->
+<dependency>
+     <groupId>org.springframework</groupId>
+     <artifactId>spring-tx</artifactId>
+     <version>5.0.1.RELEASE</version>
+</dependency>
+
+<!--jdbcTemplate依赖-->
+<dependency>
+    <groupId>org.springframework</groupId>
+    <artifactId>spring-jdbc</artifactId>
+    <version>5.2.5.RELEASE</version>
+</dependency>
+
+<!--切入点表达式依赖-->
+<dependency>
+   <groupId>org.aspectj</groupId>
+   <artifactId>aspectjweaver</artifactId>
+   <version>1.9.5</version>
+</dependency>
+
+<!--配置spring的IOC依赖-->
+<dependency>
+   <groupId>org.springframework</groupId>
+   <artifactId>spring-context</artifactId>
+   <version>5.0.1.RELEASE</version>
+</dependency>
+```
+
+
+
+
+
+具体配置：建立持久层，业务层，接口省略
+
+```java
+public class AccountDaoImpl implements AccountDao {
+
+    private JdbcTemplate jdbcTemplate;
+
+    public void setJdbcTemplate(JdbcTemplate jdbcTemplate) {
+        this.jdbcTemplate = jdbcTemplate;
+    }
+
+    //根据姓名查找账户
+    public Account findAccountByName(String name) {
+        List<Account> accounts = jdbcTemplate.query("select * from account where name=?", new BeanPropertyRowMapper<Account>(Account.class), name);
+        return accounts==null?null:accounts.get(0);
+    }
+
+    //修改账户
+    public void updateAccount(Account account) {
+        jdbcTemplate.update("update account set name=?,money=? where id=?",account.getName(),account.getMoney(),account.getId());
+    }
+}
+```
+
+```java
+public class AccountServiceImpl implements AccountService {
+
+    private AccountDao accountDao;
+
+    public void setAccountDao(AccountDao accountDao) {
+        this.accountDao = accountDao;
+    }
+
+    //转账方法
+    public void transferMoney(String sourceName, String targetName, Double money) {
+        Account sourceAccount = accountDao.findAccountByName(sourceName);
+        Account targetAccount = accountDao.findAccountByName(targetName);
+
+        sourceAccount.setMoney(sourceAccount.getMoney() - money);
+        targetAccount.setMoney(targetAccount.getMoney()- money);
+
+
+        accountDao.updateAccount(sourceAccount);
+        accountDao.updateAccount(targetAccount);
+    }
+}
+```
+
+
+
+配置xml文件，需用到tx和aop约束空间
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xmlns:tx="http://www.springframework.org/schema/tx"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xsi:schemaLocation="
+        http://www.springframework.org/schema/beans
+        http://www.springframework.org/schema/beans/spring-beans.xsd
+        http://www.springframework.org/schema/tx
+        http://www.springframework.org/schema/tx/spring-tx.xsd
+        http://www.springframework.org/schema/aop
+        http://www.springframework.org/schema/aop/spring-aop.xsd
+        http://www.springframework.org/schema/context
+        http://www.springframework.org/schema/context/spring-context.xsd">
+    
+    <bean id="accountDao" class="com.dajiao.dao.impl.AccountDaoImpl">
+    	<property name="jdbcTemlate" ref="jdbcTemplate"></property>
+    </bean>
+    
+    <bean id="service" class="com.dajiao.service.impl.AccountServiceImpl">
+    	<property name="accountDao" ref="accountDao"></property>
+    </bean>
+    
+    <!--配置JDBCTemplate对象-->
+    <bean id="jdbcTemplate" class="org.springframework.jdbc.core.JdbcTemplate">
+    	<peoperty name="dataSource" ref="dataSource"></peoperty>
+    </bean>
+    
+    <!--spring自带的数据源-->
+    <bean id="dataSource" class="org.springframework.jdbc.datasource.DriverManagerDataSource">
+        <property name="password" value="qwer"></property>
+        <property name="username" value="root"></property>
+        <property name="url" value="jdbc:mysql://localhost:3306/spring?serverTimezone=UTC"></property>
+        <property name="driverClassName" value="com.mysql.cj.jdbc.Driver"></property>
+    </bean>
+    
+    <!--配置事务管理器，相当于自己封装的事务-->
+    <bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">			<property name="dataSource" ref="dataSource"></property>
+    </bean>
+    
+    <!--配置事务的通知-->
+    <tx:advice id="txManager" transaction-manager="transactionManager">
+        <tx:attributes>
+            <!--查询设置为只读，propagation设置为SUPPORTS表示有事务就支持当前事务，没有事务就就以非事务执行
+				设置为REQUIRED表示如果当前没有事务，就新建一个事务，当前已有事务就加入到事务中
+			-->
+            <tx:method name="*" read-only="false" propagation="REQUIRED"/>
+            <tx:method name="find*" read-only="true" propagation="SUPPORTS"/>
+        </tx:attributes>
+    </tx:advice>
+    
+    <!--配置事务和切入点的联系-->
+    <aop:config>
+        <!--配置切入点表达式，指定service层中的所用方法-->
+    	<aop:pointcut id="pt" expression="execution(* com.dajiao.service.impl.*.*(..))"/>
+        <!--配置事务和切入点的联系-->
+        <aop:advisor advice-ref="txManager" pointcut-ref="pt" />
+    </aop:config>
+    
+</beans
+```
+
+
+
+测试方法
+
+```java
+public class TestAccountService {
+
+    @Test
+    public void testTransfer(){
+        //从容器中获取bean对象
+		 AccountService service = (AccountService) new 						                                                                               ClassPathXmlApplicationContext("bean.xml").getBean("service");
+        service.transferMoney("david","curry",50);
+    }
+}
+```
+
+
+
+### spring事务控制--xml和注解结合
+
+​			我们自己创建的类都用注解来注入依赖，其他的工具类还是用xml方式来配置，其实这样的方式一般是很快捷的，首先，事务管理需要在xml中开启事务的支持，然后运用注解要用到context约束空间，指定spring要扫描的包，在想开启事务的类中运用@Transactional注解，可以通过属性来设置事务的通知类型，只读或者读取类型
+
+​				首先更改xml文件
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:aop="http://www.springframework.org/schema/aop"
+       xmlns:tx="http://www.springframework.org/schema/tx"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xsi:schemaLocation="
+        http://www.springframework.org/schema/beans
+        http://www.springframework.org/schema/beans/spring-beans.xsd
+        http://www.springframework.org/schema/tx
+        http://www.springframework.org/schema/tx/spring-tx.xsd
+        http://www.springframework.org/schema/aop
+        http://www.springframework.org/schema/aop/spring-aop.xsd
+        http://www.springframework.org/schema/context
+        http://www.springframework.org/schema/context/spring-context.xsd">
+    
+     <context:component-scan base-package="com.dajiao"></context:component-scan>
+
+    <bean id="jdbcTemplate" class="org.springframework.jdbc.core.JdbcTemplate">
+        <property name="dataSource" ref="dataSource"></property>
+     </bean>
+
+    <bean id="dataSource" class="org.springframework.jdbc.datasource.DriverManagerDataSource">
+        <property name="password" value="qwer"></property>
+        <property name="username" value="root"></property>
+        <property name="url" value="jdbc:mysql://localhost:3306/spring?serverTimezone=UTC"></property>
+        <property name="driverClassName" value="com.mysql.cj.jdbc.Driver"></property>
+    </bean>
+
+    <!--事务管理器-->
+    <bean id="transactionManager" class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+        <property name="dataSource" ref="dataSource"></property>
+    </bean>
+
+    <!--开启事务的支持-->
+   <tx:annotation-driven transaction-manager="transactionManager"></tx:annotation-driven>
+    
+</beans>
+```
+
+
+
+然后运用@repository注解将AccountDao加入到IOC容器中，@Autowired注解注入jdbcTemplate依赖，@Service注解将AccountServiceImpl加入容器，然后用@Transactional注解表示此类中的方法开启事务@AutoWired将AccountDao注入依赖
+
+```java
+@Service("service")
+//次注解可以加到类上，方法上，接口上，属性设置的优先级是方法>类>大于接口
+@Transactional(propagation = Propagation.REQUIRED,readOnly = false)
+public class AccountServiceImpl implements AccountService {
+
+    @Autowired
+    private AccountDao accountDao;
+
+    public void setAccountDao(AccountDao accountDao) {
+        this.accountDao = accountDao;
+    }
+
+    public void transferMoney(String sourceName, String targetName, Double money) {
+        Account sourceAccount = accountDao.findAccountByName(sourceName);
+        Account targetAccount = accountDao.findAccountByName(targetName);
+
+        sourceAccount.setMoney(sourceAccount.getMoney() - money);
+        targetAccount.setMoney(targetAccount.getMoney()- money);
+
+
+        accountDao.updateAccount(sourceAccount);
+        accountDao.updateAccount(targetAccount);
+    }
+}
+```
+
+```java
+public class TestSpringManager {
+    @Test
+    public void testManager()
+    {
+        ApplicationContext ac = new ClassPathXmlApplicationContext("bean.xml");
+        AccountService service = (AccountService) ac.getBean("service");
+        service.transferMoney("curry","david",50.0);
+    }
+
+}
+```
+
+
+
+### spring纯注解事务控制
+
+​	
+
+​			纯注解控制事务需要创建配置类，可以清晰知道我们需要一个JdbcTemplate对象，一个事务管理的DataSourceTransactionManager对象，还有一个dataSource对象，首先配置主配置类
+
+```java
+@Configuration//说明这是一个配置类
+@ComponentScan("com.dajiao")//告知spring要扫描的包
+@Import({JdbcConfig.class})//导入的其他副配置
+@PropertySource("classpath:jdbcConfig.properties")//导入的properties文件
+@EnableTransactionManagement//开启事务的支持
+public class SpringConfiguration {
+}
+```
+
+
+
+建立副配置类
+
+```java
+public class JdbcConfig {
+
+    //value注解运用spring的EL表达式读取properties配置文件内容，获取驱动等
+    @Value("${driver}")
+    private String driver;
+    @Value("${url}")
+    private String url;
+    @Value("${user}")
+    private String username;
+    @Value("${password}")
+    private String password;
+
+    //将JDBCTemplate加入到容器中
+    @Bean("jdbcTemplate")
+    public JdbcTemplate getJdbcTemplate(DataSource dataSource) {
+        return new JdbcTemplate(dataSource);
+    }
+
+    //将dataSource加入到容器中
+    @Bean("dataSource")
+    public DataSource getDataSource(){
+
+        DriverManagerDataSource ds = new DriverManagerDataSource();
+        ds.setDriverClassName(driver);
+        ds.setUrl(url);
+        ds.setUsername(username);
+        ds.setPassword(password);
+        return ds;
+    }
+
+    //将事务管理器加入到容器中
+    @Bean("transactionManager")
+    public PlatformTransactionManager getTransactionManager(DataSource dataSource) {
+        return new DataSourceTransactionManager(dataSource);
+    }
+
+}
+```
+
+
+
+编写jdbcConfig.properties配置类
+
+```properties
+driver=com.mysql.cj.jdbc.Driver
+url=jdbc:mysql://localhost:3306/spring?serverTimezone=UTC
+user=root
+password=qwer
+```
+
+
+
+测试类
+
+```java
+@RunWith(SpringJUnit4ClassRunner.class)
+@ContextConfiguration(classes = SpringConfiguration.class)
+public class TestAccountService {
+
+    @Autowired
+    AccountService accountService;
+
+    @Test
+    public void testTransfer(){
+        accountService.transferMoney("david","curry",50);
+    }
+}
+```
+
+
+
+
+
+## 总结
+
+
+
+​			spring提供了两个大功能，自带的事务控制和JdbcTemplate
+
+* 依赖注入(Dependency Injection)
+
+  ​	将需要的对象加入到容器中，然后对类的属性进行 注入，有xml方式和注解方式，xml注入方式有两种，构造器注入和set方法注入，set方法注入更加方便，更加直观，自己写的类用注解方式比较好，其它类用xml方式配置比较好，xml和注解结合通常可以提高效率，减少了new关键字的出现，可以说注入依赖的方式在构建项目中无处不在，是整个spring的核心之处，对项目的维护起了很大的作用
+
+
+
+* AOP：面向切面编程
+
+  ​	切面就是切入点和通知的结合，切入点就是想要增强的方法，通知就是增强的内容，通知又分为前置，后置，异常，最终和环绕
+
+  前置在切入点之前执行，后置就是切入点之后执行，异常是在出异常时执行，后置和异常只能出现一个，最终就是最后要执行的，AOP的主要功能就是抽取重复代码，在需要执行的时候，使用动态代理，增强方法
+
+
+
+* 事务控制
+
+  ​	通过配置的方式进行事务控制，一般事务控制都是在业务层，xml方式需要tx空间约束和aop约束，还有aspectjweaver依赖的导入，用于解析切入点表达式。导入spring-tx依赖，用于事务管理，配置spring的事务管理器，配置事务通知，最后配置事务通知和切入点表达式的联系，注解的方式需要在配置类中使用@EnableTransactionManagement开启事务的支持，然后在需要事务的类中使用@Transactional注解进行事务管理，还有一种是编程式的事务控制，执行excute方法，这种方式有点本末倒置，解决了事务，但是确增加了代码的重复性，不推荐
+
+
+
+* JdbcTemplate
+
+  ​	spring内置的对象，对jdbc进行了简单的封装，可以和数据库交互执行增删改查方法，根DBUtils用法几乎相同
 
