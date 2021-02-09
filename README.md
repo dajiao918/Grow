@@ -19,7 +19,7 @@
 ## SSM
 * [MyBatis](https://github.com/dajiao918/Grow/tree/master/elseNote/MyBatis.md)
 * [Spring](https://github.com/dajiao918/Grow/tree/master/elseNote/spring.md)
-* [SrpingMVC](https://github.com/dajiao918/Grow/tree/master/elseNote/springMVC.md)
+* [SpringMVC](https://github.com/dajiao918/Grow/tree/master/elseNote/springMVC.md)
 
 ## 工具
 * [git&github](https://github.com/dajiao918/Grow/tree/master/elseNote/Git&GitHub.md)
