@@ -25,6 +25,10 @@
 * [SSM整合](https://github.com/dajiao918/Grow/blob/main/elseNote/springMVC.md#SSM整合)
   * [1. 导入相关依赖](https://github.com/dajiao918/Grow/blob/main/elseNote/springMVC.md#1-导入相关依赖)
   * [2. 配置web.xml](https://github.com/dajiao918/Grow/blob/main/elseNote/springMVC.md#2-配置web.xml)
+* [请求重定向和转发](https://github.com/dajiao918/Grow/blob/main/elseNote/springMVC.md#请求重定向和转发)
+* [异常处理](https://github.com/dajiao918/Grow/blob/main/elseNote/springMVC.md#异常处理)
+* [拦截器](https://github.com/dajiao918/Grow/blob/main/elseNote/springMVC.md#拦截器)
+  * [权限拦截器举例](https://github.com/dajiao918/Grow/blob/main/elseNote/springMVC.md#权限拦截器举例)
 
 
 
@@ -873,7 +877,7 @@ jdbc.user=root
 jdbc.password=qwer
 ```
 
-当配置好了spring文件之后，在spring的容器之中就有了sqlSessionFactory对象和dao所有的dao接口动态代理对象了，此时我们不需要在dao接口使用注解，将dao接口中的对象加入到spring容器中
+当配置好了spring文件之后，在spring的容器之中就有了sqlSessionFactory对象和所有的dao接口动态代理对象了，此时我们不需要在dao接口使用注解，将dao接口中的对象加入到spring容器中
 
 最后配置mybatis的主配置文件即可
 
@@ -887,5 +891,347 @@ jdbc.password=qwer
 
 
 
-接下来就可以使用注解和xm的方式进行具体的开发了
+## 请求重定向和转发
+
+
+
+​        转发：转发请求是服务器将客户端的请求从一个资源转发到另一个资源，请求只有一次，地址栏不发生改变，并且可以访问到WEB-INf下的页面
+
+​		重定向：重定向是两次请求，是不能直接访问WEB-INF页面的，第一次和第二次都是不同的requset
+
+​		springMVC把原来servlet的请求转发和重定向操作进行了封装，我们可以使用简单的方式实现重定向和转发
+
+
+
+* 转发
+
+​		当处理器方法返回ModelAndView时，需要在setViewName()方法指定视图时前添加forward:，此时视图是不会被视图解析器解析的，所以后面需要跟资源的项目路劲，当处理器方法返回String时，在视图前面加入forward:制视图完整路径
+
+```java
+@RequestMapping("/testRequest.do")
+    public ModelAndView testRequest(String name, int age) {
+
+        ModelAndView mv = new ModelAndView();
+        System.out.println(name + "  " + age);
+        mv.addObject("msg","forward");
+        mv.setViewName("forward:/WEB-INF/show.jsp");
+        return mv;
+    }
+```
+
+```jsp
+<form action="myController/testRequest.do" method="post">
+        姓名:<input type="text" name="name"><br>
+        年龄:<input type="text" name="age"><br>
+        <input type="submit" value="提交">
+    </form
+```
+
+此时就可以直接访问/WEB-INF/show.jsp了，不再和视图解析器搭配使用
+
+
+
+* 重定向
+
+
+
+​			重定向和转发相同，只需要在是使徒前面添加redirect:试图完整路径
+
+```java
+@RequestMapping("/testResponse.do")
+    public ModelAndView testResponse(String name, int age) {
+
+        ModelAndView mv = new ModelAndView();
+        System.out.println(name + "  " + age);
+        mv.addObject("msg","redirect");
+        mv.setViewName("redirect:/show.jsp");
+        return mv;
+    }
+```
+
+```hjsp
+<form action="myController/testResponse.do" method="post">
+        姓名:<input type="text" name="name"><br>
+        年龄:<input type="text" name="age"><br>
+        <input type="submit" value="提交">
+    </form>
+```
+
+此时的重定向是不能访问WEB-INF下的页面的，springMVC框架为重定向提供了一点小的改变，在第二次请求时会带上第一次请求的参数，但是第一次存储在request域中的数据是没有的，要想获取参数，需要在jsp页面中利用param获取
+
+
+
+
+
+## 异常处理
+
+
+
+​		springMVC框架处理异常的方式：使用@ExceptionHandler注解处理异常，这个注解只有一个value属性，是一个class<?>数组，用于指定注解方法要处理的异常类的字节码，被注解的方法，可以有任意的返回值，方法的参数可以是Exception，HttpServletRequest，HttpServletResponse，系统会自动得为这些方法赋值
+
+​	
+
+​		我们可以自定义异常类
+
+```java
+public class MyUserException extends Exception{
+    public MyUserException() {
+        super();
+    }
+
+    public MyUserException(String message) {
+        super(message);
+    }
+}
+
+public class NameException extends MyUserException{
+    public NameException() {
+        super();
+    }
+
+    public NameException(String message) {
+        super(message);
+    }
+}
+
+public class AgeException extends MyUserException{
+
+    public AgeException() {
+        super();
+    }
+
+    public AgeException(String message) {
+        super(message);
+    }
+}
+```
+
+​	
+
+在controller类中定义一个方法，抛出异常
+
+```java
+@RequestMapping("/testException.do")
+    public ModelAndView testException(String name, int age) throws MyUserException {
+
+        ModelAndView mv = new ModelAndView();
+        if (!"yu".equals(name)){
+            throw new NameException("姓名不是yu");
+        }
+        if (age == 0 || age > 100) {
+            throw new AgeException("年龄太老了");
+        }
+
+        mv.addObject("msg","没有异常");
+        mv.setViewName("/show.jsp");
+        return mv;
+    }
+```
+
+定义全局异常处理类
+
+```java
+@ControllerAdvice//指定此类是全局处理异常类
+public class GlobalExceptionResolver {
+
+    //处理nameException异常
+    @ExceptionHandler(value = NameException.class)
+    public ModelAndView testNameException(Exception exception){
+
+        ModelAndView mv = new ModelAndView();
+        mv.addObject("msg","请求404，姓名错误");
+        mv.addObject("ex",exception);
+        mv.setViewName("/WEB-INF/nameError.jsp");
+        return mv;
+    }
+
+    //处理ageException异常
+    @ExceptionHandler(value = AgeException.class)
+    public ModelAndView testAgeException(Exception exception){
+
+        ModelAndView mv = new ModelAndView();
+        mv.addObject("msg","请求404，age错误");
+        mv.addObject("ex",exception);
+        mv.setViewName("/WEB-INF/nameError.jsp");
+        return mv;
+    }
+
+    //处理其它异常
+    @ExceptionHandler
+    public ModelAndView testOtherException(Exception exception){
+
+        ModelAndView mv = new ModelAndView();
+        mv.addObject("msg","请求404，other错误");
+        mv.addObject("ex",exception);
+        mv.setViewName("/WEB-INF/nameError.jsp");
+        return mv;
+    }
+
+}
+```
+
+配置扫描组件，扫描全局异常类
+
+```xml
+<context:component-scan base-package="com.dajiao.controllerAdvice"/>
+```
+
+
+
+这个类被注解@ControllerAdvice修饰，表示控制器增强，当@RequestMapping注解修饰的类中抛出异常后，会执行@ControllerAdvice修饰的类中的异常处理方法，但是前提需要在springMVC的配置文件中声明组件扫描器，将异常处理类的路径覆盖，当@ExceptionHandler没有属性时，会处理所有异常，有属性时，会处理对应的异常
+
+```jsp
+AgeError.jsp:
+<h3>欢迎来到德莱联盟</h3>
+ msg：${requestScope.msg}<br>   
+异常信息：${ex.message}
+
+NameError.jsp:
+<h3>欢迎来到德莱联盟</h3>
+    msg：${requestScope.msg}<br>
+    异常信息：${ex.message}
+
+OtherError.jsp:
+<h3>欢迎来到德莱联盟</h3>
+    msg：${requestScope.msg}<br>
+    异常信息：${ex.message}
+```
+
+当名字输入不是yu时，会跳转到nameError.jsp页面，当输入的年龄大于100时，会跳转到ageError页面，当产生其他异常时，会跳转到otherError页面
+
+
+
+
+
+## 拦截器
+
+
+
+​			springMVC中的interceptor拦截器是非常重要的，他的主要作用是拦截指定的用户请求，并进行响应的预处理和后处理，拦截时间点在“处理器映射器根据用户提交的请求映射出了所要执行的处理器类，并且找到了要执行处理类的处理器适配器，在处理器适配器执行处理器之前”。当然，在处理器映射器映射出所要执行的处理器类时，已经将拦截器和处理器组合为了一个处理器执行链，并返回给了前端控制器
+
+
+
+* 一个拦截器的执行
+
+  ​		自定义拦截器，需要实现HandlerInterceptor接口，接口中提供了三个可重写的方法--------------preHandle(request,response,Object hadnler)
+
+  ​		这个方法会在处理器方法执行前执行，返回值是boolean类型的，如果返回的是true，那么就会执行处理器的方法，并且会把afterCompletion放入一个专门的方法栈等待执行，若返回为false，将不会执行处理器方法
+
+
+
+​		postHandle(request,response,Object handler,modelAndView);
+
+​				该方法在处理器方法执行之后执行，处理器方法若最终未被执行，则该方法不会执行，由于这个方法是在处理器方法执行完之后执行，并且含有一个ModelAndView对象，所以该方法可以对处理器处理器的结果进行二次修改，还能修改跳转的页面
+
+
+
+​		afterCompletion(request,response,Object handlerm Exception ex);
+
+当preHandle()方法返回true时，会将这个方法放倒专门的方法栈找中，等到对请求进行响应的所有工作完成之后才执行这个方法。该方法是在前端控制器将数据填充到相应页面之后才执行的，此时对ModelAndView操作也无济于事，但它可以清除资源，例如在controller方法中将数据加入发到session域中后，可以根据此方法的request获取session对象，并清除数据
+
+
+
+实现HandlerInterceptor接口，实现接口的三个方法
+
+```java
+public class MyInterceptor implements HandlerInterceptor {
+
+    @Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+        System.out.println("preHandle方法执行");
+        return true;
+    }
+
+    @Override
+    public void postHandle(HttpServletRequest request, HttpServletResponse response, Object handler, ModelAndView modelAndView) throws Exception {
+        System.out.println("postHandle方法执行");
+    }
+
+    @Override
+    public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) throws Exception {
+        System.out.println("afterCompletion方法执行");
+    }
+}
+```
+
+
+
+配置springMVC配置文件注册拦截器
+
+```xml
+<mvc:interceptors>
+    <mvc:interceptor>
+        <!--指定拦截的路径，/**表示拦截所有-->
+        <mvc:mapping path="/myController/**"/>
+        <bean class="com.dajiao.interceptor.MyInterceptor"/>
+    </mvc:interceptor>
+</mvc:interceptors>
+```
+
+测试结果：
+
+​	preHandle方法执行
+​	处理器方法执行
+​	postHandle方法执行
+​	afterCompletion方法执行
+
+
+
+当拦截器有多个的时候，执行结果是
+
+​	preHandle1方法执行
+
+​	preHandle2方法执行
+​	处理器方法执行
+​	postHandle2方法执行
+
+​	postHandle1方法执行
+
+​	afterCompletion2方法执行
+
+​	afterCompletion1方法执行
+
+
+
+### 权限拦截器举例
+
+​		
+
+​		当用户想要购买东西时，这个时候需要验证有没有登录，就可以使用拦截器执行
+
+```java
+@RequestMapping("/orderCart.do")
+    public String orderCart(){
+        return "/orderSuccess.jsp";
+    }
+```
+
+```java
+@Override
+    public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+
+        Student student = (Student) 		                 						request.getSession().getAttribute("student");                  
+        //如果用户信息不为空，放行
+        if (student != null){
+            return true;
+        }
+   //用户信息为空，跳到登录页面 request.getRequestDispatcher("/login.jsp").forward(request,response);
+        //不能执行处理器的方法
+        return false;
+}
+```
+
+```xml
+<mvc:interceptors>
+    <mvc:interceptor>
+        <!--指定拦截的路径，/**表示拦截所有-->
+        <mvc:mapping path="/order/**"/>
+        <bean class="com.dajiao.interceptor.MyInterceptor"/>
+    </mvc:interceptor>
+</mvc:interceptors>
+```
+
+```jsp
+<a href="/order/orderCart.do">去结账</a>
+```
 
